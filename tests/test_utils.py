@@ -36,8 +36,10 @@ def series_with_nan():
 
 @pytest.fixture
 def wgs84_points_gdf():
-    """Small GeoDataFrame of WGS84 points inside NC."""
-    geoms = [Point(-82.5, 35.5), Point(-79.0, 35.0), Point(-77.0, 34.5)]
+    """Small GeoDataFrame of WGS84 points inside NC.
+    Points are placed at tract centroids, not on edges, so within predicate works.
+    """
+    geoms = [Point(-82.5, 35.5), Point(-79.5, 35.0), Point(-77.0, 34.5)]
     return gpd.GeoDataFrame(
         {"value": [10.0, 20.0, 30.0]},
         geometry=geoms,
@@ -322,19 +324,21 @@ class TestQueryArcgisFeatureLayer:
 
     @patch("src.utils.requests.get")
     def test_paginates_when_full_page(self, mock_get):
-        """Should make a second request if first page is exactly max_records."""
+        """Should make a second request if first page is exactly max_records.
+        Loop stops when a page returns fewer features than max_records — no
+        extra empty-page request is needed.
+        """
         page1 = [self._make_feature(-82.0, 35.5, id=i) for i in range(3)]
-        page2 = [self._make_feature(-79.0, 35.0, id=10)]
+        page2 = [self._make_feature(-79.0, 35.0, id=10)]  # 1 < max_records → stop
 
         mock_get.side_effect = [
             self._make_mock_response(page1),
             self._make_mock_response(page2),
-            self._make_mock_response([]),
         ]
 
         result = query_arcgis_feature_layer("https://fake.url/query", max_records=3)
         assert len(result) == 4
-        assert mock_get.call_count == 3
+        assert mock_get.call_count == 2
 
     @patch("src.utils.requests.get")
     def test_result_crs_is_wgs84(self, mock_get):
