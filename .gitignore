@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_metadata/
+
+# Data (large files — keep structure, ignore contents)
+data/raw/*.csv
+data/raw/*.geojson
+data/raw/*.parquet
+data/raw/*.graphml
+data/raw/*.gpkg
+data/raw/*.zip
+data/raw/*.pdf
+data/processed/*.gpkg
+data/processed/*.csv
+data/processed/*.html
+data/processed/*.png
+data/processed/*.pdf
+data/processed/*.jpg
+data/processed/*.parquet
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
