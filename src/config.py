@@ -203,17 +203,20 @@ HIFLD_TOWER_URL = (
 )
 HIFLD_MAX_RECORDS = 2000  # ArcGIS default page size
 
-# ── HIFLD Power Grid (Electric Substations) ──────────────────────────────────
+# ── HIFLD Power Grid (Electric Transmission Lines) ───────────────────────────
 # Source: Homeland Infrastructure Foundation-Level Data (HIFLD) — public layer
-# Substations are a proxy for grid vulnerability: fewer substations per tract →
-# higher infrastructure fragility (single points of failure for grid-dependent
-# communication equipment such as cellular towers and fiber amplifiers).
-HIFLD_SUBSTATION_URL = (
-    "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/ArcGIS/rest/services/"
-    "Electric_Substations/FeatureServer/0/query"
+# Transmission line density per tract is a proxy for grid connectivity:
+# communities with little or no transmission line access depend on long
+# distribution lines that are more vulnerable to storm damage, increasing
+# the risk of cascading communication infrastructure failure.
+# Note: this service has no STATE column; queries use a bbox spatial filter.
+HIFLD_TRANSMISSION_URL = (
+    "https://services2.arcgis.com/FiaPA4ga0iQKduv3/ArcGIS/rest/services/"
+    "US_Electric_Power_Transmission_Lines/FeatureServer/0/query"
 )
-# Relevant attribute fields to retain from the HIFLD substations layer
-HIFLD_SUBSTATION_FIELDS = "OBJECTID,STATUS,COUNTY,STATE,COUNTYFIPS,LINES,MAX_VOLT,MIN_VOLT"
+HIFLD_TRANSMISSION_FIELDS = "OBJECTID,TYPE,STATUS,VOLTAGE,VOLT_CLASS,Shape__Length"
+# NC bounding box (WGS84) for spatial filter
+NC_BBOX_WGS84 = (-84.5, 33.7, -75.2, 36.7)
 
 # ── Census ACS 5-Year Estimates ──────────────────────────────────────────────
 CENSUS_API_KEY = os.getenv("CENSUS_API_KEY", "")

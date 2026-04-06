@@ -1,54 +1,51 @@
 #!/usr/bin/env python3
-"""Fetch HIFLD electric substations and compute a power-grid fragility layer.
+"""Fetch HIFLD electric transmission lines and compute a power-grid fragility layer.
 
 This script adds an optional power-grid component to the HABRI Infrastructure
-Fragility sub-index. It is intentionally kept separate from the baseline
-notebooks to avoid changing validated index scores.
+Fragility sub-index. It is intentionally separate from the baseline notebooks
+so existing validated index scores are not altered.
 
 What it produces
 ----------------
-data/raw/hifld_substations_nc.geojson
-    Raw substation point features for NC from HIFLD.
+data/raw/hifld_transmission_lines_nc.geojson
+    Raw transmission line polyline features for NC from HIFLD.
 
 data/processed/power_grid_fragility.csv / .gpkg
-    Tract-level substation density and normalized power-grid fragility score.
+    Tract-level transmission line density and normalized power-grid fragility.
     Columns:
-      GEOID                  — 11-digit census tract FIPS
-      substation_count       — raw count of substations within the tract
-      substation_density     — substations per km² (EPSG:2264 area)
-      power_grid_norm        — z-score normalized, inverted: high density → low fragility score
-      substation_max_volt    — maximum voltage (kV) of substations in tract (proxy for grid tier)
+      GEOID                     — 11-digit census tract FIPS
+      transmission_line_km      — total km of in-service lines intersecting the tract
+      transmission_density      — line-km per km² of tract area
+      power_grid_norm           — z-score normalized, inverted:
+                                  high density → low fragility score [0,1]
+      max_voltage_kv            — max voltage (kV) of lines in tract (grid tier proxy)
 
 Integration guidance
 ---------------------
-To incorporate into the I_F sub-index, adjust weights in src/config.py and
-recompute I_F as a weighted average of the four components:
+To incorporate into I_F, adjust weights in src/config.py (must sum to 1.0):
 
-    I_F = w_tower * tower_density_norm
-        + w_latency * latency_norm
-        + w_road * road_fragility
-        + w_power * power_grid_norm
-
-Suggested weight rebalancing (sums to 1.0):
-    tower:    0.25
-    latency:  0.25
-    road:     0.30
-    power:    0.20
+    I_F = 0.25 * tower_density_norm
+        + 0.25 * latency_norm
+        + 0.30 * road_fragility
+        + 0.20 * power_grid_norm
 
 Usage
 -----
     python scripts/fetch_power_grid.py
-    python scripts/fetch_power_grid.py --state-fips 37  # explicit NC
+    python scripts/fetch_power_grid.py --force   # re-fetch even if cached
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -59,110 +56,130 @@ from src.config import (
     DATA_PROCESSED,
     DATA_RAW,
     HIFLD_MAX_RECORDS,
-    HIFLD_SUBSTATION_FIELDS,
-    HIFLD_SUBSTATION_URL,
+    HIFLD_TRANSMISSION_FIELDS,
+    HIFLD_TRANSMISSION_URL,
+    NC_BBOX_WGS84,
     SQFT_PER_SQKM,
-    STATE_FIPS,
 )
 from src.utils import ensure_crs, impute_with_median, load_study_tracts, z_score_normalize
 
 
-def fetch_substations(state_fips: str) -> gpd.GeoDataFrame:
-    """Download electric substation points from HIFLD for the given state.
+def fetch_transmission_lines() -> gpd.GeoDataFrame:
+    """Download in-service electric transmission lines for NC from HIFLD.
 
-    Filters server-side to the target state FIPS to minimise download size.
-    Paginates automatically (HIFLD caps responses at 2,000 features).
+    Uses a bounding-box spatial filter since the service has no state column.
+    Paginates automatically until all features are retrieved.
     """
-    from src.utils import query_arcgis_feature_layer
+    minx, miny, maxx, maxy = NC_BBOX_WGS84
+    geometry_filter = {
+        "geometry": json.dumps({"xmin": minx, "ymin": miny, "xmax": maxx, "ymax": maxy,
+                                 "spatialReference": {"wkid": 4326}}),
+        "geometryType": "esriGeometryEnvelope",
+        "spatialRel": "esriSpatialRelIntersects",
+        "inSR": "4326",
+    }
 
-    # HIFLD COUNTYFIPS is a 5-digit string e.g. "37021"; filter on first 2 digits
-    # Use LIKE operator since server-side SUBSTRING is not universally supported
-    where = f"STATE = '{state_fips}' OR COUNTYFIPS LIKE '{state_fips}%'"
+    all_features = []
+    offset = 0
+    print(f"  Querying HIFLD transmission lines for NC bounding box...")
 
-    print(f"  Querying HIFLD substations for state {state_fips}...")
-    gdf = query_arcgis_feature_layer(
-        url=HIFLD_SUBSTATION_URL,
-        where=where,
-        out_fields=HIFLD_SUBSTATION_FIELDS,
-        max_records=HIFLD_MAX_RECORDS,
-    )
+    while True:
+        params = {
+            "where": "STATUS = 'IN SERVICE'",
+            "outFields": HIFLD_TRANSMISSION_FIELDS,
+            "f": "geojson",
+            "resultOffset": offset,
+            "resultRecordCount": HIFLD_MAX_RECORDS,
+            "returnGeometry": "true",
+            **geometry_filter,
+        }
+        resp = requests.get(HIFLD_TRANSMISSION_URL, params=params, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
 
-    if gdf.empty:
-        print("  WARNING: No substations returned. Check the HIFLD URL or state filter.")
-        return gdf
+        features = data.get("features", [])
+        if not features:
+            break
+        all_features.extend(features)
+        print(f"    Retrieved {len(all_features):,} features so far...")
 
-    # Keep only active or in-service substations (exclude decommissioned)
-    if "STATUS" in gdf.columns:
-        active_statuses = {"IN SERVICE", "UNDER CONSTRUCTION", "PROPOSED"}
-        before = len(gdf)
-        gdf = gdf[
-            gdf["STATUS"].str.upper().isin(active_statuses)
-            | gdf["STATUS"].isna()
-        ].copy()
-        removed = before - len(gdf)
-        if removed:
-            print(f"  Removed {removed} non-active substations")
+        if len(features) < HIFLD_MAX_RECORDS:
+            break
+        offset += HIFLD_MAX_RECORDS
 
-    print(f"  Retrieved {len(gdf):,} substations")
+    if not all_features:
+        raise RuntimeError("No transmission line features returned. Check URL or bbox.")
+
+    geojson = {"type": "FeatureCollection", "features": all_features}
+    gdf = gpd.GeoDataFrame.from_features(geojson, crs=CRS_WGS84)
+    print(f"  Retrieved {len(gdf):,} in-service transmission line segments")
     return gdf
 
 
-def compute_substation_density(
-    substations: gpd.GeoDataFrame,
+def compute_transmission_density(
+    lines_gdf: gpd.GeoDataFrame,
     tracts: gpd.GeoDataFrame,
 ) -> gpd.GeoDataFrame:
-    """Join substations to tracts and compute density (substations/km²)."""
-    subs = ensure_crs(substations, CRS_PROJECT)
+    """Intersect transmission lines with census tracts and compute line-km density."""
+    lines = ensure_crs(lines_gdf, CRS_PROJECT)
     tracts_proj = ensure_crs(tracts, CRS_PROJECT)
 
-    # Spatial join: assign each substation to the tract it falls within
-    joined = gpd.sjoin(subs, tracts_proj[["GEOID", "geometry"]], how="inner", predicate="within")
+    # Clip lines to exact tract boundaries (not just bbox)
+    print("  Clipping lines to tract boundaries...")
+    lines_clipped = gpd.overlay(lines, tracts_proj[["GEOID", "geometry"]], how="intersection")
+
+    # Length in the projected CRS (US survey feet for EPSG:2264) → convert to km
+    # 1 US survey foot = 0.0003048006096 km
+    FEET_TO_KM = 0.0003048006096
+    lines_clipped["line_km"] = lines_clipped.geometry.length * FEET_TO_KM
+
+    # Parse voltage: HIFLD uses -999999 for unknown
+    lines_clipped["voltage_kv"] = pd.to_numeric(lines_clipped.get("VOLTAGE", np.nan), errors="coerce")
+    lines_clipped.loc[lines_clipped["voltage_kv"] < 0, "voltage_kv"] = np.nan
 
     # Aggregate per tract
     agg = (
-        joined.groupby("GEOID")
+        lines_clipped.groupby("GEOID")
         .agg(
-            substation_count=("geometry", "count"),
-            substation_max_volt=("MAX_VOLT", lambda x: pd.to_numeric(x, errors="coerce").max()),
+            transmission_line_km=("line_km", "sum"),
+            max_voltage_kv=("voltage_kv", "max"),
         )
         .reset_index()
     )
 
-    # Compute tract area in km²
+    # Tract areas in km²
     result = tracts_proj[["GEOID", "geometry"]].copy()
     result["area_sqkm"] = result.geometry.area / SQFT_PER_SQKM
     result = result.merge(agg, on="GEOID", how="left")
-    result["substation_count"] = result["substation_count"].fillna(0).astype(int)
-    result["substation_max_volt"] = result["substation_max_volt"].fillna(0.0)
+    result["transmission_line_km"] = result["transmission_line_km"].fillna(0.0)
+    result["max_voltage_kv"] = result["max_voltage_kv"].fillna(0.0)
 
-    # Density: substations per km²
-    result["substation_density"] = result["substation_count"] / result["area_sqkm"].replace(0, float("nan"))
+    result["transmission_density"] = (
+        result["transmission_line_km"] / result["area_sqkm"].replace(0, np.nan)
+    )
 
+    covered = (result["transmission_line_km"] > 0).sum()
+    print(f"  {covered:,} / {len(result):,} tracts contain transmission lines")
+    print(f"  Density range: [{result['transmission_density'].min():.4f}, "
+          f"{result['transmission_density'].max():.4f}] line-km/km²")
     return result
 
 
 def normalize_power_grid(result: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Compute inverted z-score norm: high substation density → low fragility."""
-    density = result["substation_density"]
+    """Compute inverted z-score norm: higher density → lower fragility score."""
+    density = result["transmission_density"]
+    valid = density.notna() & (result["area_sqkm"] > 0)
 
-    # Tracts with zero substations stay at 0 density; they represent highest fragility
-    # We impute missing (geometry issues) but keep zeros as real data
-    has_density = density.notna() & (result["area_sqkm"] > 0)
-
-    result["power_grid_norm"] = float("nan")
-    if has_density.any():
-        # invert=True: more substations (higher density) → lower fragility score
-        result.loc[has_density, "power_grid_norm"] = z_score_normalize(
-            density[has_density], invert=True
-        )
+    result["power_grid_norm"] = np.nan
+    if valid.any():
+        result.loc[valid, "power_grid_norm"] = z_score_normalize(density[valid], invert=True)
 
     result, _ = impute_with_median(result, "power_grid_norm", "Power grid fragility (normalized)")
     return result
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fetch HIFLD substations and compute power-grid fragility.")
-    parser.add_argument("--state-fips", default=STATE_FIPS, help="2-digit state FIPS (default: 37 for NC)")
+    parser = argparse.ArgumentParser(description="Fetch HIFLD transmission lines and compute power-grid fragility.")
     parser.add_argument("--force", action="store_true", help="Re-fetch even if local file exists")
     return parser.parse_args()
 
@@ -172,52 +189,37 @@ def main() -> None:
     DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 
     args = parse_args()
-    state_fips = args.state_fips
-
-    raw_path = DATA_RAW / f"hifld_substations_{state_fips}.geojson"
+    raw_path = DATA_RAW / "hifld_transmission_lines_nc.geojson"
     out_csv = DATA_PROCESSED / "power_grid_fragility.csv"
     out_gpkg = DATA_PROCESSED / "power_grid_fragility.gpkg"
 
     print(f"\n{'='*60}")
-    print("HABRI — Power Grid Fragility Layer")
+    print("HABRI — Power Grid Fragility Layer (Transmission Lines)")
     print(f"{'='*60}\n")
 
-    # Step 1: Fetch or load substations
-    print("[1/3] Substation data")
+    print("[1/3] Transmission line data")
     if raw_path.exists() and not args.force:
         print(f"  Loading cached file: {raw_path}")
-        substations = gpd.read_file(raw_path)
+        lines = gpd.read_file(raw_path)
     else:
-        substations = fetch_substations(state_fips)
-        if substations.empty:
-            print("No substations found. Exiting.")
-            sys.exit(1)
-        substations.to_file(raw_path, driver="GeoJSON")
-        print(f"  Saved raw substations → {raw_path}")
+        lines = fetch_transmission_lines()
+        lines.to_file(raw_path, driver="GeoJSON")
+        print(f"  Saved raw transmission lines → {raw_path}")
 
-    # Step 2: Join to tracts and compute density
-    print("\n[2/3] Computing substation density per tract")
+    print(f"\n[2/3] Computing transmission density per tract")
     tracts = load_study_tracts()
     tracts["GEOID"] = tracts["GEOID"].astype(str).str.zfill(11)
+    result = compute_transmission_density(lines, tracts)
 
-    result = compute_substation_density(substations, tracts)
-    coverage = (result["substation_count"] > 0).sum()
-    print(f"  {coverage:,} / {len(result):,} tracts contain at least one substation")
-    print(f"  Density range: [{result['substation_density'].min():.4f}, "
-          f"{result['substation_density'].max():.4f}] substations/km²")
-
-    # Step 3: Normalize
-    print("\n[3/3] Normalizing and saving")
+    print(f"\n[3/3] Normalizing and saving")
     result = normalize_power_grid(result)
 
-    keep_cols = ["GEOID", "substation_count", "substation_density",
-                 "power_grid_norm", "substation_max_volt"]
+    keep_cols = ["GEOID", "transmission_line_km", "transmission_density",
+                 "power_grid_norm", "max_voltage_kv"]
     result[keep_cols].to_csv(out_csv, index=False)
     result[keep_cols + ["geometry"]].to_file(out_gpkg, driver="GPKG")
-
     print(f"  {out_csv}")
     print(f"  {out_gpkg}")
-
     print("\nTo integrate power_grid_norm into I_F, see the docstring at the top of this script.")
 
 
