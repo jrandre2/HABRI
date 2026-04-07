@@ -1,6 +1,8 @@
 # Article Outline — HABRI (Revised, Apr 2026)
 # Hazard-Adjusted Broadband Reliability Index for North Carolina
 
+Scope note: this outline is intentionally for the North Carolina manuscript. The repository also contains Tennessee comparison tooling and a shared NC+TN standardized layer, but those cross-state operational products are not the primary framing of this paper draft unless explicitly added in revision.
+
 **Target venue:** *Telecommunications Policy* (Elsevier)
 **Format:** ~8,500 words body text; APA 7th citations; 7 figures; 4 tables; supplementary data
 **Abstract limit:** 250 words

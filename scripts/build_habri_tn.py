@@ -11,15 +11,19 @@ data/processed/habri_tn_composite.csv / .gpkg
     1,701 tracts × HABRI + sub-indices + profiles.
 data/processed/hazard_tn_scores.gpkg
     H_E sub-index + NRI components for TN tracts.
-data/processed/infra_tn_fragility.gpkg
-    I_F sub-index + tower / latency / road / power components.
+data/processed/infra_tn_towers.csv
+    TN tower-density component used in I_F assembly.
+data/processed/road_tn_fragility.csv
+    TN road fragility component used in I_F assembly.
+data/processed/power_tn_grid.csv
+    TN power-grid component used in I_F assembly.
 data/raw/ookla_tn_fixed_q3_2024.gpkg
     Pre-Helene Ookla tiles for TN (Q3 2024).
 data/raw/ookla_tn_fixed_q4_2024.gpkg
     Post-Helene Ookla tiles for TN (Q4 2024).
 data/raw/tn_road_network.graphml
     OSMnx statewide TN road graph (very large — ~2 hr download).
-data/processed/habri_tn_statewide_4panel.png / .pdf
+data/processed/habri_tn_statewide_4panel.png
     Statewide 4-panel choropleth (H_E, I_F, C_C, HABRI).
 data/processed/habri_tn_profiles.png
     Eastern TN vulnerability profile map.

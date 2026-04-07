@@ -1,5 +1,7 @@
 # Mapping Broadband Vulnerability to Natural Hazards: The Hazard-Adjusted Broadband Reliability Index for North Carolina
 
+Scope note: this manuscript draft remains focused on the North Carolina baseline analysis. The codebase now also includes a Tennessee statewide extension and a shared NC+TN standardized operational layer, but those products are not yet woven into this paper draft except where future revisions choose to incorporate them.
+
 **Jesse R. Andrews**  
 [Affiliation — Texas Tech University]  
 jesseand@ttu.edu

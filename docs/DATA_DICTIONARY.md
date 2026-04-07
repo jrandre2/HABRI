@@ -1,6 +1,8 @@
 # HABRI Data Dictionary
 
-This document defines every data file produced and consumed by the HABRI pipeline, including column-level definitions, data types, value ranges, and provenance.
+This document defines the primary data files produced and consumed by the HABRI pipeline, including column-level definitions, data types, value ranges, and provenance.
+
+Scope note: the North Carolina statewide baseline remains the primary validated product. The repository also includes a Tennessee statewide baseline and a combined NC+TN standardized layer for shared-scale regional mapping.
 
 ---
 
@@ -8,6 +10,8 @@ This document defines every data file produced and consumed by the HABRI pipelin
 
 - [Output Files](#output-files)
   - [habri_composite.csv / .gpkg](#habri_compositecsv--gpkg)
+  - [habri_tn_composite.csv / .gpkg](#habri_tn_compositecsv--gpkg)
+  - [habri_nc_tn_standardized.csv / .gpkg](#habri_nc_tn_standardizedcsv--gpkg)
   - [hazard_scores.gpkg](#hazard_scoresgpkg)
   - [infra_fragility.gpkg](#infra_fragilitygpkg)
   - [acs_demographics.csv](#acs_demographicscsv)
@@ -33,7 +37,7 @@ This document defines every data file produced and consumed by the HABRI pipelin
 **Records:** 2,660 (one per census tract)
 **CRS:** EPSG:2264 (.gpkg only)
 
-This is the primary deliverable — the final HABRI scores with all sub-indices, component scores, and classifications.
+This is the primary North Carolina baseline deliverable — the final HABRI scores with all sub-indices, component scores, and classifications.
 
 | Column | Type | Range | Description |
 |--------|------|-------|-------------|
@@ -47,7 +51,8 @@ This is the primary deliverable — the final HABRI scores with all sub-indices,
 | `latency_norm` | float | [0, 1] | Z-score + CDF normalized pre-Helene broadband latency (higher = worse baseline performance) |
 | `road_fragility` | float | [0, 1] | Composite road network fragility (betweenness centrality + inverse road density) |
 | `power_grid_norm` | float | [0, 1] | Z-score + CDF normalized electric transmission line density, **inverted** (higher = sparser grid = more fragile) |
-| `p_wired` | float | [0, 1] | Fraction of fixed broadband-covered locations served by a wired technology (DSL/Cable/Fiber) per FCC BDC Jun 2025 filing. Used to compute adaptive I_F weights. NaN for tracts outside BDC coverage. |
+| `county_fips` | string | 5-digit FIPS | State+county FIPS, e.g. `37021` |
+| `power_grid_norm_old` | float | [0, 1] or null | Legacy pre-refresh power-grid value retained during baseline regeneration for auditability |
 | `C_C` | float | [0, 1] | **Coping Capacity Deficit** sub-index. Weighted combination of five demographic vulnerability indicators. Higher = less capacity to cope. |
 | `no_vehicle_vuln` | float | [0, 1] | Normalized % of workers with no vehicle available |
 | `mobile_only_vuln` | float | [0, 1] | Normalized % of households with cellular-only internet |
@@ -58,6 +63,62 @@ This is the primary deliverable — the final HABRI scores with all sub-indices,
 | `HABRI_quintile` | string | `Very Low`, `Low`, `Moderate`, `High`, `Very High` | Quintile classification of HABRI score (5 equal-count groups) |
 | `cluster` | int | 0, 1, or 2 | Raw k-means cluster assignment (internal; use `risk_profile` instead) |
 | `risk_profile` | string | `Power-Dependent`, `Transport-Fragile`, `Dual-Risk` | Interpreted vulnerability profile label derived from cluster analysis |
+| `geometry` | geometry | — | Census tract polygon boundary (.gpkg only) |
+
+### habri_tn_composite.csv / .gpkg
+
+**Location:** `data/processed/habri_tn_composite.csv` (tabular) and `data/processed/habri_tn_composite.gpkg` (geospatial)  
+**Produced by:** `scripts/build_habri_tn.py`  
+**Records:** 1,701 (one per census tract)  
+**CRS:** EPSG:2274 (.gpkg only)
+
+This is the Tennessee statewide baseline built with the same HABRI formulas as the NC baseline.
+
+Core score columns mirror `habri_composite.*`: `GEOID`, `H_E`, `ifld_norm`, `hrcn_norm`, `lnds_norm`, `I_F`, `tower_density_norm`, `latency_norm`, `road_fragility`, `power_grid_norm`, `C_C`, `no_vehicle_vuln`, `mobile_only_vuln`, `disability_vuln`, `income_vuln`, `poverty_vuln`, `HABRI`, `HABRI_quintile`, `cluster`, `risk_profile`, and `geometry` (.gpkg only).
+
+Newer runs of `build_habri_tn.py` also write:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `state_fips` | string | `47` |
+| `state_abbr` | string | `TN` |
+| `state_name` | string | `Tennessee` |
+| `county_fips` | string | 5-digit state+county FIPS |
+| `county_name` | string | County name derived from `TN_CONFIG` |
+
+Legacy TN outputs created before the schema harmonization patch may omit those five metadata columns.
+
+### habri_nc_tn_standardized.csv / .gpkg
+
+**Location:** `data/processed/habri_nc_tn_standardized.csv` (tabular) and `data/processed/habri_nc_tn_standardized.gpkg` (geospatial)  
+**Produced by:** `scripts/build_habri_nc_tn_combined.py`  
+**Records:** 4,361 (2,660 NC + 1,701 TN tracts)  
+**CRS:** EPSG:4326 (.gpkg only)
+
+This is the shared-scale NC+TN product used for unified cross-state maps. It is built by harmonizing the completed NC and TN baselines, preserving their original within-state values, and re-standardizing the three sub-indices across the full combined tract set.
+
+| Column | Type | Range | Description |
+|--------|------|-------|-------------|
+| `GEOID` | string | 11 chars | Census tract FIPS identifier |
+| `state_fips` | string | `37` or `47` | State FIPS code |
+| `state_abbr` | string | `NC` or `TN` | State abbreviation |
+| `state_name` | string | — | Human-readable state name |
+| `county_fips` | string | 5-digit FIPS | State+county FIPS |
+| `county_name` | string | — | Human-readable county name |
+| `H_E` | float | [0, 1] | Shared-scale Hazard Exposure value across all NC+TN tracts |
+| `I_F` | float | [0, 1] | Shared-scale Infrastructure Fragility value across all NC+TN tracts |
+| `C_C` | float | [0, 1] | Shared-scale Coping Capacity Deficit value across all NC+TN tracts |
+| `HABRI` | float | [0, 1] | Shared-scale HABRI composite recomputed from the shared-scale sub-indices |
+| `HABRI_quintile` | string | `Very Low` ... `Very High` | Quintile on the combined NC+TN distribution |
+| `risk_profile` | string | `Power-Dependent`, `Transport-Fragile`, `Dual-Risk` | Profile inherited from the underlying state baseline |
+| `H_E_state` | float | [0, 1] | Original within-state H_E value before joint re-standardization |
+| `I_F_state` | float | [0, 1] | Original within-state I_F value |
+| `C_C_state` | float | [0, 1] | Original within-state C_C value |
+| `HABRI_state` | float | [0, 1] | Original within-state HABRI value |
+| `HABRI_quintile_state` | string | `Very Low` ... `Very High` | Original within-state quintile |
+| `HABRI_delta_vs_state` | float | any | Difference between shared-scale and within-state HABRI |
+| `standardization_scope` | string | `nc_tn_joint` | Identifies the shared standardization universe |
+| `standardization_method` | string | `joint_subindex_zscore_cdf` | Shared-scale method descriptor |
 | `geometry` | geometry | — | Census tract polygon boundary (.gpkg only) |
 
 ### habri_current_<version>.csv / .gpkg
@@ -73,16 +134,15 @@ This is a versioned re-computation that keeps baseline `H_E` and `C_C` fixed, re
 | Column | Type | Range | Description |
 |--------|------|-------|-------------|
 | `GEOID` | string (11 chars) | e.g. `37021000100` | Census tract FIPS identifier |
-| `latency_norm_<VERSION>` | float | [0, 1] | Z-score + CDF normalized current latency |
-| `latency_norm_<VERSION>_imputed` | float | [0, 1] | Imputed version of `latency_norm_<VERSION>` |
 | `avg_latency_ms_<VERSION>` | float | > 0 | Versioned tract-level average latency |
-| `avg_download_mbps_<VERSION>` | float | > 0 | Versioned tract-level average download speed |
-| `avg_upload_mbps_<VERSION>` | float | > 0 | Versioned tract-level average upload speed |
-| `avg_jitter_ms_<VERSION>` | float | > 0 | Versioned tract-level average jitter (NaN if source jitter is unavailable) |
-| `latency_delta_ms_vs_q3_2024` | float | any | Difference vs baseline latency (version minus baseline) |
-| `latency_abs_delta_ms_vs_q3_2024` | float | >= 0 | Absolute latency delta |
-| `latency_pct_change_vs_q3_2024` | float | any | Percentage change vs baseline latency |
+| `latency_norm` | float | [0, 1] | Overwritten current-conditions latency normalization used in the recomputed `I_F` |
+| `I_F` | float | [0, 1] | Recomputed Infrastructure Fragility value using the versioned latency |
+| `HABRI` | float | [0, 1] | Recomputed HABRI value using the updated `I_F` |
+| `HABRI_quintile` | string | `Very Low` ... `Very High` | Quintile on the versioned NC distribution |
+| `risk_profile` | string | `Power-Dependent`, `Transport-Fragile`, `Dual-Risk` | Reassigned profile after the versioned update |
 | `geometry` | geometry | — | Census tract polygon boundary (.gpkg only) |
+
+All other baseline NC score/component columns are retained from `habri_composite.*`.
 
 ### infra_fragility_current_<version>.gpkg
 
@@ -431,7 +491,7 @@ Tract-level wired broadband composition derived from FCC BDC block-level availab
 
 ## Visualization Outputs
 
-All stored in `data/processed/`. Generated by `scripts/plot_habri_maps.py`, `scripts/plot_time_series.py`, and Notebook 04. Not machine-readable data.
+All stored in `data/processed/`. Generated by `scripts/plot_habri_maps.py`, `scripts/plot_time_series.py`, `scripts/build_habri_tn.py`, `scripts/build_habri_nc_tn_combined.py`, and Notebook 04. Not machine-readable data.
 
 | File | Format | Generated By | Description |
 |------|--------|-------------|------------|
@@ -442,6 +502,12 @@ All stored in `data/processed/`. Generated by `scripts/plot_habri_maps.py`, `scr
 | `habri_profiles.png` | PNG (800 DPI) | `plot_habri_maps.py` | K-means vulnerability profile map for Land of the Sky counties |
 | `habri_profiles.pdf` | PDF | `plot_habri_maps.py` | Vector version of the profiles map |
 | `habri_map.html` | HTML | `plot_habri_maps.py` | Interactive Folium map with HABRI choropleth, risk profiles, and tower overlays (~21 MB) |
+| `habri_tn_statewide_4panel.png` | PNG (300 DPI) | `build_habri_tn.py` | Tennessee statewide four-panel HABRI map |
+| `habri_tn_profiles.png` | PNG (300 DPI) | `build_habri_tn.py` | Eastern Tennessee Helene-county vulnerability profile map |
+| `habri_tn_helene_validation.png` | PNG (200 DPI) | `build_habri_tn.py` | Eastern Tennessee validation scatter using Q3→Q4 2024 latency change |
+| `habri_nc_tn_standardized.png` | PNG (300 DPI) | `build_habri_nc_tn_combined.py` | Single-panel shared-scale NC+TN HABRI map |
+| `habri_nc_tn_standardized_4panel.png` | PNG (300 DPI) | `build_habri_nc_tn_combined.py` | Four-panel shared-scale NC+TN sub-index map |
+| `habri_nc_tn_standardized.html` | HTML | `build_habri_nc_tn_combined.py` | Interactive combined NC+TN shared-scale map |
 | `habri_timeseries_statewide.png` | PNG (300 DPI) | `plot_time_series.py` | Line chart of statewide mean HABRI and sub-index scores across Q3 2024 – Q4 2025 |
 | `habri_timeseries_wnc.png` | PNG (300 DPI) | `plot_time_series.py` | WNC county HABRI trends vs. NC statewide mean; Helene impact band |
 | `habri_timeseries_profiles.png` | PNG (300 DPI) | `plot_time_series.py` | Stacked bar chart of risk profile fraction per quarter |
@@ -469,10 +535,13 @@ All HABRI data files use a consistent tract identification scheme:
 | `GEOID` | 11-digit string | `37021000100` | Standard Census tract FIPS. Used in all processed outputs. |
 | `TRACTFIPS` | 11-digit string | `37021000100` | Same value as GEOID. Used in the NRI source data. |
 | `STCOFIPS` | 5-digit string | `37021` | State+county FIPS. Used for county-level filtering. |
+| `county_fips` | 5-digit string | `47019` | State+county FIPS stored directly in several processed outputs |
 
-**GEOID structure:** `SS` + `CCC` + `TTTTTT` where SS = state FIPS (37 = NC), CCC = county FIPS, TTTTTT = tract code.
+**GEOID structure:** `SS` + `CCC` + `TTTTTT` where SS = state FIPS (for example 37 = NC, 47 = TN), CCC = county FIPS, TTTTTT = tract code.
 
-The study area covers all 100 North Carolina counties. The full county FIPS mapping is in `src/config.py` (`COUNTY_FIPS` dict). Example entries:
+The baseline NC study area covers all 100 North Carolina counties. The TN extension covers all 95 Tennessee counties. County mappings are in `src/config.py` (`COUNTY_FIPS`) and `src/region.py` (`TN_CONFIG.county_fips`).
+
+Example entries:
 
 | County | County FIPS | Full STCOFIPS |
 |--------|-----------|---------------|
@@ -488,11 +557,15 @@ The study area covers all 100 North Carolina counties. The full county FIPS mapp
 | Convention | Meaning |
 |------------|---------|
 | All normalized scores in [0, 1] | 0 = lowest risk / best condition; 1 = highest risk / worst condition |
-| Z-score + CDF normalization | `norm(x) = Φ((x - mean) / std)` — maps study area mean to 0.5, bounded [0, 1] |
+| Z-score + CDF normalization | `norm(x) = Φ((x - mean) / std)` — maps the relevant normalization-scope mean to 0.5, bounded [0, 1] |
 | "Inverted" normalization | Applied when high raw values indicate *lower* risk (e.g., more towers, higher income). Formula: `Φ(-z)` |
 | NaN / missing values | Uniformly imputed with study area median via `impute_with_median()` |
 | Constant series | If all tracts have the same value for an indicator, normalized score is set to 0.5 (neutral) |
 | Census sentinel `-666666666` | Converted to NaN during data acquisition |
-| CRS for all spatial files | EPSG:2264 (NAD83 / North Carolina, US survey feet) |
-| Area conversion | 1 km^2 = 10,763,910.4 sq ft (EPSG:2264 native units) |
+| Baseline normalization scope | NC baseline is relative to NC only; TN baseline is relative to TN only |
+| Shared cross-state scope | `habri_nc_tn_standardized.*` uses `standardization_scope = nc_tn_joint` |
+| CRS for NC spatial baseline files | EPSG:2264 (NAD83 / North Carolina, US survey feet) |
+| CRS for TN spatial baseline files | EPSG:2274 (NAD83 / Tennessee, US survey feet) |
+| CRS for combined NC+TN spatial files | EPSG:4326 (WGS84) |
+| Area conversion | 1 km^2 = 10,763,910.4 sq ft for the NC and TN state-plane processing CRSs |
 | Road segment length | Always in meters (OSMnx convention), regardless of CRS |

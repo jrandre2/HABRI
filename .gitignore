@@ -25,6 +25,7 @@ data/raw/*.graphml
 data/raw/*.gpkg
 data/raw/*.zip
 data/raw/*.pdf
+data/raw/.osmnx_cache/
 data/processed/*.gpkg
 data/processed/*.csv
 data/processed/*.html

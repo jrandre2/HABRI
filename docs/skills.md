@@ -149,8 +149,21 @@ python scripts/build_habri_tn.py --force       # rerun everything
 **Long-running steps:** OSMnx TN road network download (~1–2 hr), betweenness centrality (~30–40 min).
 Script is checkpoint-safe — intermediate files are cached and re-used on re-runs.
 
-**Outputs:** `habri_tn_composite.csv/.gpkg`, `hazard_tn_scores.gpkg`, `infra_tn_fragility.gpkg`,
-`habri_tn_statewide_4panel.png`, `habri_tn_profiles.png`, `habri_tn_helene_validation.png`
+**Outputs:** `habri_tn_composite.csv/.gpkg`, `hazard_tn_scores.gpkg`, `infra_tn_towers.csv`,
+`road_tn_fragility.csv`, `power_tn_grid.csv`, `habri_tn_statewide_4panel.png`,
+`habri_tn_profiles.png`, `habri_tn_helene_validation.png`
+
+### /build-combined
+
+Build the shared NC+TN standardized layer and unified maps.
+
+```bash
+python scripts/build_habri_nc_tn_combined.py
+python scripts/build_habri_nc_tn_combined.py --skip-folium
+```
+
+**Outputs:** `habri_nc_tn_standardized.csv/.gpkg`, `habri_nc_tn_standardized.png`,
+`habri_nc_tn_standardized_4panel.png`, `habri_nc_tn_standardized.html`
 
 ### /compare-helene
 
@@ -185,6 +198,8 @@ streamlit run app.py
 
 Tabs: interactive map (color by score/profile/quintile), data table with download,
 charts (distribution, profile bar, top-20, county summary), baseline vs. current comparison.
+Sidebar dataset modes: `North Carolina baseline` and `NC + TN standardized`.
+The baseline-vs-current comparison tab is only populated for the NC baseline mode.
 
 ### /build-site
 

@@ -1,5 +1,7 @@
 # Research Specification: HABRI Project Initialization
 
+Historical note: this file is the original North Carolina project initialization spec. The live repository has since added a Tennessee statewide pipeline and a shared NC+TN standardized layer, but this document is intentionally preserved as the starting NC scope.
+
 ## 1. Project Overview
 We are building a Python-based geospatial analysis pipeline to create the **Hazard-Adjusted Broadband Reliability Index (HABRI)**. The goal is to merge hazard data (floods, landslides) with broadband infrastructure proxies to identify areas at high risk of communications failure.
 

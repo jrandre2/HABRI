@@ -1,5 +1,7 @@
 # HABRI Stakeholder Outreach Templates
 
+Scope note: these templates are intentionally North Carolina-facing. They describe the NC baseline product for state and federal stakeholders and do not automatically mention the Tennessee extension or the shared NC+TN standardized layer unless you customize the message.
+
 Tailored messages for the three primary audiences. Personalize the bracketed fields before sending.
 
 ---

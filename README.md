@@ -18,7 +18,13 @@ The goal is to help planners, emergency managers, and policymakers direct resour
 
 ## Study Area
 
-This study covers **all 100 counties in North Carolina** (2,660 census tracts), expanded from the original 6-county Western NC pilot to provide statewide coverage. The western mountain region most severely impacted by Hurricane Helene serves as the primary validation case study.
+The repository now supports three related spatial products:
+
+- **North Carolina baseline**: all 100 counties (2,660 census tracts), expanded from the original 6-county Western NC pilot.
+- **Tennessee baseline**: all 95 counties (1,701 census tracts), built with the same HABRI framework for cross-state comparison.
+- **NC+TN standardized layer**: a combined 4,361-tract layer on a shared second-pass standardized scale for unified mapping across both states.
+
+The western North Carolina mountain region most severely impacted by Hurricane Helene remains the primary validation case study. Eastern Tennessee serves as the cross-state comparison extension.
 
 The methodology is designed to be replicable for any state or region in the United States using the same freely available data sources.
 
@@ -70,6 +76,8 @@ This component uses U.S. Census data to identify populations that are disproport
 ---
 
 ## Key Findings
+
+The findings in this section refer to the **North Carolina baseline** unless a file or layer is explicitly identified as Tennessee or combined NC+TN.
 
 ### Overall Risk Landscape
 
@@ -132,12 +140,21 @@ January 2026 updates are modeled as **versioned current-conditions layers** so t
 
 | File | Description |
 |------|-------------|
-| `habri_composite.csv` | Complete tract-level results: HABRI scores, sub-index scores, vulnerability profiles |
-| `habri_composite.gpkg` | Same data as a geospatial file (GeoPackage) for use in GIS software |
+| `habri_composite.csv` | North Carolina baseline tract-level results: HABRI scores, sub-index scores, vulnerability profiles |
+| `habri_composite.gpkg` | Same NC baseline data as a geospatial file (GeoPackage) for use in GIS software |
+| `habri_tn_composite.csv` | Tennessee baseline tract-level results built with the same HABRI framework |
+| `habri_tn_composite.gpkg` | Same Tennessee baseline data as a geospatial file |
+| `habri_nc_tn_standardized.csv` | Combined NC+TN tract-level layer with shared-scale `H_E`, `I_F`, `C_C`, and `HABRI` scores plus preserved state-local `*_state` columns |
+| `habri_nc_tn_standardized.gpkg` | Same combined NC+TN standardized layer as a geospatial file |
 | `habri_map.html` | Interactive web map — open in any browser to explore tracts, scores, and profiles |
+| `habri_nc_tn_standardized.html` | Interactive web map for the combined NC+TN shared-scale layer |
 | `habri_statewide_4panel.png` | Statewide publication-quality map showing all four indicators and the composite score for all 2,660 NC tracts |
+| `habri_tn_statewide_4panel.png` | Tennessee statewide four-panel HABRI map |
+| `habri_nc_tn_standardized.png` | Single-panel combined NC+TN shared-scale HABRI map |
+| `habri_nc_tn_standardized_4panel.png` | Four-panel combined NC+TN shared-scale map |
 | `habri_4panel.png` | Zoomed publication-quality map of Land of the Sky counties (Buncombe, Henderson, Madison, Transylvania) |
 | `habri_profiles.png` | Vulnerability profile map for Land of the Sky counties |
+| `habri_tn_profiles.png` | Vulnerability profile map for Eastern Tennessee Helene-affected counties |
 | `habri_timeseries_statewide.png` | Quarterly trend line (Q3 2024 – Q4 2025) for statewide mean HABRI and sub-indices |
 | `habri_timeseries_wnc.png` | WNC county HABRI trajectories vs. NC statewide mean, showing Helene impact and recovery |
 | `habri_timeseries_profiles.png` | Stacked bar showing fraction of tracts in each risk profile per quarter |
@@ -167,6 +184,12 @@ The main results file (`habri_composite.csv`) contains one row per census tract 
 | `HABRI_quintile` | Risk tier: Very Low, Low, Moderate, High, or Very High |
 | `risk_profile` | Vulnerability type: Power-Dependent, Transport-Fragile, or Dual-Risk |
 
+For cross-state comparison, use `habri_nc_tn_standardized.csv` / `.gpkg`. In that layer:
+
+- `H_E`, `I_F`, `C_C`, and `HABRI` are re-standardized on a shared NC+TN scale
+- `H_E_state`, `I_F_state`, `C_C_state`, and `HABRI_state` preserve the original within-state baseline values
+- `standardization_scope = nc_tn_joint` identifies the shared-scale product
+
 ### The Interactive Map
 
 Open `habri_map.html` in a web browser to explore the results visually. The map includes toggleable layers:
@@ -176,6 +199,8 @@ Open `habri_map.html` in a web browser to explore the results visually. The map 
 - **Cellular Towers** — Blue dots showing cell tower locations
 
 Hover over any tract to see its ID, risk profile, and HABRI score.
+
+The Streamlit dashboard (`streamlit run app.py`) can now switch between the **North Carolina baseline** and the **NC + TN standardized** layer from the sidebar.
 
 ### Current-conditions January 2026 Run (Optional)
 
@@ -201,6 +226,10 @@ The baseline files `habri_composite.csv` and `habri_composite.gpkg` remain uncha
 
 ### Technical Reproducibility with Notebooks
 
+- The four notebooks reproduce the **North Carolina baseline** end to end.
+- Tennessee is built with `scripts/build_habri_tn.py`, which mirrors the same logic in a resumable script form.
+- The shared NC+TN map is built with `scripts/build_habri_nc_tn_combined.py` after both state baselines exist.
+
 ---
 
 ## Methodology Notes
@@ -213,13 +242,13 @@ A **sensitivity analysis** tested five different weight configurations (equal we
 
 ### Normalization
 
-All indicators are z-score normalized within the study area and mapped to [0, 1] via the standard normal CDF. This approach is more robust to outliers than min-max normalization and maps the study area mean to 0.5. The scores represent *relative* risk among the 2,660 NC tracts. Road edges are assigned to tracts via midpoint interpolation to avoid double-counting edges that cross tract boundaries.
+All indicators are z-score normalized within the relevant study scope and mapped to [0, 1] via the standard normal CDF. This approach is more robust to outliers than min-max normalization and maps the scope mean to 0.5. For the baseline NC layer, scores represent *relative* risk among the 2,660 NC tracts. For the Tennessee baseline, they represent relative risk among the 1,701 TN tracts. The combined `habri_nc_tn_standardized.*` layer performs a second-pass shared standardization across the union of both state baselines so the resulting map can be interpreted on one cross-state scale. Road edges are assigned to tracts via midpoint interpolation to avoid double-counting edges that cross tract boundaries.
 
 ### Limitations
 
 - **Temporal snapshot**: Infrastructure and demographic data reflect a single point in time (2022–2024) and will need periodic updates; the quarterly Ookla refresh addresses the latency component
 - **Proxy measures**: Cell tower density, transmission-line density, and road centrality are proxies for true network topology, which is proprietary information held by carriers; road centrality is empirically validated against fixed broadband degradation (Helene, ρ = −0.287, p < 0.001) but not mobile degradation
-- **Study area scope**: Normalization is local to North Carolina — scores are not directly comparable to other states without re-running the analysis
+- **Study area scope**: The baseline NC and TN outputs are normalized within each state independently. Use `habri_nc_tn_standardized.*` for the shared NC+TN map; do not compare the raw state baselines across states directly.
 - **BDC adaptive weighting**: The FCC BDC data (Jun 2025 filing) adjusts I_F weights toward tower density for wireless-dominant tracts and toward road centrality for wired-dominant tracts; weights remain uniform for any tract where BDC coverage data is unavailable
 
 ---
@@ -241,7 +270,7 @@ HABRI/
 ├── notebooks/
 │   ├── 01_data_acquisition     # Downloads and caches all data sources
 │   ├── 02_hazard_processing    # Computes Hazard Exposure (H_E)
-│   ├── 03_infra_proxy_gen      # Computes Infrastructure Fragility (I_F, 3-component)
+│   ├── 03_infra_proxy_gen      # Computes NC Infrastructure Fragility intermediates
 │   └── 04_index_calculation    # Computes Coping Capacity (C_C), assembles
 │                               #   HABRI, profiles tracts, validates, maps
 ├── scripts/
@@ -252,20 +281,24 @@ HABRI/
 │   ├── validate_road_proxy_mobile.py  # Fixed vs. mobile latency validation of road proxy
 │   ├── plot_time_series.py         # Multi-quarter HABRI trend figures (WNC recovery)
 │   ├── plot_habri_maps.py          # Regenerate all static and interactive HABRI maps
+│   ├── build_habri_tn.py           # Tennessee statewide HABRI pipeline
+│   ├── compare_helene_nc_tn.py     # WNC vs Eastern TN Helene comparison figures
+│   ├── build_habri_nc_tn_combined.py   # Shared-scale NC+TN combined layer + maps
 │   ├── build_habri_current_2026_01.py   # Versioned current-conditions HABRI (Jan 2026)
 │   ├── build_ookla_jan_2026_validation.py  # Validation against baseline
 │   └── build_site.py               # GitHub Pages static site builder
 ├── src/
 │   ├── config.py               # All project settings and constants
 │   ├── utils.py                # Shared helper functions (normalization, imputation, etc.)
-│   └── region.py               # RegionConfig dataclass for multi-state parameterization
+│   ├── region.py               # RegionConfig dataclass for multi-state parameterization
+│   └── combined.py             # Schema harmonization + shared NC/TN standardization helpers
 ├── app.py                      # Streamlit dashboard
 ├── requirements.txt            # Python package dependencies
 ├── research_spec.md            # Original research specification
 └── README.md                   # This file
 ```
 
-The four notebooks run sequentially — each depends on outputs from the previous one. The full pipeline takes approximately 2–4 hours to run from scratch (the road network download and betweenness centrality computation are the bottlenecks).
+The four notebooks run sequentially for the **North Carolina baseline** — each depends on outputs from the previous one. The full NC notebook pipeline takes approximately 2–4 hours to run from scratch (the road network download and betweenness centrality computation are the bottlenecks). Tennessee and shared NC+TN products are built by the dedicated scripts listed above.
 
 ---
 
@@ -301,17 +334,30 @@ jupyter notebook notebooks/01_data_acquisition.ipynb
 # 5. Optional: regenerate January 2026 current-conditions comparison from a fixed-network export
 python scripts/build_habri_current_2026_01.py --version-tag 2026_01
 python scripts/build_ookla_jan_2026_validation.py --version-tag 2026_01
+
+# 6. Optional: build Tennessee and the shared NC+TN layer
+python scripts/build_habri_tn.py
+python scripts/build_habri_nc_tn_combined.py
+
+# 7. Optional: launch the dashboard
+streamlit run app.py
 ```
 
 ### Coordinate Reference System
 
-All spatial analysis uses **EPSG:2264** (NAD83 / North Carolina, US survey feet). This ensures accurate distance and area calculations for the study region. Area conversions: 1 km² = 10,763,910.4 square feet.
+Processing CRS depends on the layer:
+
+- **NC baseline**: `EPSG:2264` (NAD83 / North Carolina, US survey feet)
+- **TN baseline**: `EPSG:2274` (NAD83 / Tennessee, US survey feet)
+- **Combined NC+TN standardized layer**: saved in `EPSG:4326` for cross-state web mapping
+
+For the state-plane layers, 1 km² = 10,763,910.4 square feet.
 
 ### Extending to Other Regions
 
 To apply HABRI to a different region:
 
-1. Update the county FIPS codes in `src/config.py`
+1. Update the county FIPS codes in `src/config.py` or add a dedicated `RegionConfig` in `src/region.py`
 2. Re-run the notebooks — all data sources are fetched programmatically (except the FEMA NRI CSV, which requires a one-time manual download)
 3. Consider adjusting hazard weights if the region faces different primary threats (e.g., wildfire instead of landslide)
 

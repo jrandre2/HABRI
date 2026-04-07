@@ -2,6 +2,8 @@
 
 This guide covers environment setup, architecture, coding conventions, and how to extend HABRI to new regions or indicators.
 
+Scope note: the canonical validated baseline remains the North Carolina statewide layer. The repository also contains a Tennessee statewide pipeline and a shared NC+TN standardized layer for unified cross-state mapping.
+
 ---
 
 ## Table of Contents
@@ -71,18 +73,19 @@ All other data sources are fetched automatically by Notebook 01.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    src/config.py                         │
-│  All constants: FIPS codes, weights, URLs, column maps   │
+│  Global constants: paths, weights, URLs, NC defaults     │
 └──────────────────────┬──────────────────────────────────┘
                        │ imported by
 ┌──────────────────────▼──────────────────────────────────┐
-│                    src/utils.py                           │
-│  Shared functions: CRS, normalization, spatial joins,    │
-│  ArcGIS pagination, Census API, IODA API                 │
+│         src/utils.py / src/region.py / src/combined.py   │
+│  Shared helpers, multi-state RegionConfig, schema        │
+│  harmonization, and NC+TN shared-scale standardization   │
 └──────────────────────┬──────────────────────────────────┘
                        │ imported by
 ┌──────────────────────▼──────────────────────────────────┐
-│                    Notebooks (01-04)                      │
-│  Sequential pipeline; each reads prior outputs           │
+│        Notebooks (NC baseline) + scripts (TN/combined)   │
+│  NC notebooks 01-04, TN statewide build, cross-state     │
+│  comparison, shared NC+TN layer, quarterly refresh       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -90,9 +93,10 @@ All other data sources are fetched automatically by Notebook 01.
 
 1. **Config is centralized.** All constants, weights, FIPS codes, URLs, and column mappings live in `src/config.py`. Notebooks never hardcode these values.
 2. **Utils are stateless.** Functions in `src/utils.py` are pure (or nearly pure) and take data as arguments.
-3. **Notebooks are sequential.** Each notebook reads outputs from prior notebooks. Outputs are GeoPackage or CSV files in `data/processed/`.
+3. **NC notebooks are sequential.** Each NC baseline notebook reads outputs from prior notebooks. Outputs are GeoPackage or CSV files in `data/processed/`.
 4. **Raw data is immutable.** Files in `data/raw/` are never modified after download. Processing always writes to `data/processed/`.
 5. **Idempotent execution.** Each notebook checks for cached outputs before re-downloading. You can safely re-run any notebook.
+6. **Cross-state products are explicit.** The combined NC+TN layer is built separately from the state baselines so within-state interpretation remains intact.
 
 ---
 
@@ -122,16 +126,33 @@ Run notebooks in order. Each checks for cached data and skips downloads if outpu
     ├── Reads:     hazard_scores.gpkg, infra_fragility.gpkg, acs_demographics.csv,
     │              study_tracts.gpkg, ookla_*.gpkg, ioda_asn_timeseries.csv
     ├── Outputs:   habri_composite.gpkg, habri_composite.csv, habri_map.html,
-    │              habri_4panel.png, habri_profiles.png, habri_validation.png,
+    │              habri_4panel.png, habri_profiles.png,
     │              ioda_outage_timeseries.png, fcc_county_validation.png
     └── Time:      ~5-10 min
 ```
 
 ### Full pipeline from scratch: ~2-4 hours (dominated by betweenness centrality on statewide road graph)
 
+### Tennessee and cross-state products
+
+After the NC baseline exists, the repo supports two additional workflows:
+
+```bash
+# Tennessee statewide baseline
+python scripts/build_habri_tn.py
+
+# WNC vs Eastern Tennessee Helene comparison figures
+python scripts/compare_helene_nc_tn.py
+
+# Shared NC+TN standardized layer and maps
+python scripts/build_habri_nc_tn_combined.py
+```
+
+The combined layer preserves the original state-local scores in `*_state` columns and recomputes the main `H_E`, `I_F`, `C_C`, and `HABRI` fields on a shared NC+TN scale.
+
 ## Current-Conditions Refresh
 
-The published baseline (`habri_composite.*`) is the source of truth for `H_E` and `C_C` and is not updated during current-conditions runs.
+The published North Carolina baseline (`habri_composite.*`) is the source of truth for `H_E` and `C_C` and is not updated during current-conditions runs. Current-conditions refreshes are currently implemented for the NC baseline path only.
 
 To generate a new January 2026-style scenario from a fixed-network export:
 
@@ -170,7 +191,7 @@ Single source of truth for all project constants. Key sections:
 | Section | What It Contains |
 |---------|-----------------|
 | Paths | `PROJECT_ROOT`, `DATA_RAW`, `DATA_PROCESSED` |
-| CRS | `CRS_PROJECT` (EPSG:2264), `CRS_WGS84` (EPSG:4326) |
+| CRS | `CRS_PROJECT` (NC default), `CRS_WGS84`, plus multi-state CRSs in `src/region.py` |
 | Study area | `STATE_FIPS`, `COUNTY_FIPS` dict, `COUNTY_FIPS_FULL` list |
 | NRI | Column name mappings for scores, ratings, EAL; rating ordinal encoding |
 | Ookla | S3 base URL, quarter definitions, column list; `ookla_s3_path()` helper |
@@ -197,13 +218,33 @@ Reusable functions. Keep these stateless and general-purpose.
 | `fetch_acs_tract_data(...)` | Census ACS API query for a single county; handles sentinel value conversion |
 | `fetch_acs_state_tracts(...)` | Census ACS API query for all tracts in a state (single API call) |
 
+### src/region.py
+
+Multi-state configuration layer for adapting HABRI beyond NC.
+
+| Object | Purpose |
+|--------|---------|
+| `RegionConfig` | Dataclass for state FIPS, county FIPS, CRS, weights, and focal counties |
+| `NC_CONFIG` | Built-in NC configuration matching the baseline |
+| `TN_CONFIG` | Built-in TN configuration used by `build_habri_tn.py` |
+
+### src/combined.py
+
+Cross-state harmonization and shared-scale layer helpers.
+
+| Function | Purpose |
+|----------|---------|
+| `harmonize_habri_schema(...)` | Standardize `state_*` and `county_*` metadata across state outputs |
+| `build_joint_standardized_habri(...)` | Re-standardize NC and TN sub-indices on one shared NC+TN scale |
+| `load_joint_standardized_habri(...)` | Load the saved state baselines and return the combined layer |
+
 ---
 
 ## Extending to a New Region
 
 To apply HABRI to a different set of counties:
 
-### Step 1: Update config.py
+### Step 1: Update config.py or add a RegionConfig in src/region.py
 
 ```python
 # Example: Coastal NC counties
@@ -217,6 +258,8 @@ COUNTY_FIPS = {
 ```
 
 The rest of the config (`COUNTY_FIPS_LIST`, `COUNTY_FIPS_FULL`) will update automatically.
+
+For a reusable multi-state setup, prefer adding a dedicated `RegionConfig` entry in `src/region.py` and consuming that from a script, as the Tennessee pipeline does with `TN_CONFIG`.
 
 ### Step 2: Adjust hazard weights (if appropriate)
 
@@ -433,7 +476,7 @@ Exact betweenness on the statewide road graph (648,424 nodes, 1,528,603 edges) w
 ### Spatial data
 
 - Always call `ensure_crs()` before spatial joins or area calculations
-- Use EPSG:2264 for all processing; convert to EPSG:4326 only for display or external APIs
+- Use the region-appropriate projected CRS for processing (`EPSG:2264` for NC, `EPSG:2274` for TN); convert to EPSG:4326 for display or external APIs
 - Prefer GeoPackage (`.gpkg`) over Shapefile or GeoParquet for intermediate outputs
 
 ### Naming

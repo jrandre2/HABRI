@@ -1,5 +1,6 @@
 HABRI: Hazard-Adjusted Broadband Reliability Index
 
+Scope note: the validated baseline HABRI product in this repository remains the statewide North Carolina layer. The codebase also includes a Tennessee statewide pipeline and a shared-scale NC+TN standardized layer for cross-state mapping. Unless otherwise noted below, this explainer refers to the North Carolina baseline.
 
 What HABRI Is
 
@@ -8,7 +9,7 @@ HABRI is a composite risk score that identifies which communities in North Carol
 
 What Goes Into It
 
-The index integrates five public datasets:
+The index integrates seven public datasets:
 
 - FEMA National Risk Index: Flood, hurricane, and landslide risk scores computed at the tract level for the entire US. These are FEMA's own composite estimates of expected annual loss, exposure, and community resilience for each hazard type.
 
@@ -17,6 +18,10 @@ The index integrates five public datasets:
 - Ookla Speedtest Data: Crowdsourced broadband performance measurements aggregated into geographic tiles. We use average latency (response time in milliseconds) as an indicator of network health. Higher baseline latency suggests infrastructure that is already under strain and more likely to degrade under disaster conditions.
 
 - OpenStreetMap Road Network: The complete drivable road graph for North Carolina (648,000+ nodes, 1.5 million+ road segments). We compute betweenness centrality -- a network science measure of how critical each road segment is as a transportation chokepoint. Roads that carry a disproportionate share of all shortest paths between locations are single points of failure. When they wash out, the fiber and cable lines that follow road corridors go with them.
+
+- HIFLD Electric Transmission Lines: High-voltage transmission infrastructure used to estimate power-grid exposure. Tracts with sparse transmission access depend on longer, more failure-prone distribution runs, and grid loss directly causes communications outages.
+
+- FCC Broadband Data Collection (BDC): Block-level broadband availability used to compute `p_wired`, the share of covered locations served by wired technology. This lets the Infrastructure Fragility weights shift toward road dependency in wired tracts and toward tower dependency in wireless-dominant tracts.
 
 - US Census American Community Survey: Demographic indicators including households without vehicle access, mobile-only internet subscribers, disability prevalence, median household income, and poverty rates. These capture a community's capacity to adapt when communications infrastructure fails.
 
@@ -31,7 +36,13 @@ Infrastructure Fragility (35% of score) measures the physical vulnerability of t
 
 Coping Capacity Deficit (25% of score) uses five equally weighted Census indicators to measure how well a community can adapt when service goes down: no-vehicle rate, mobile-only internet rate, disability prevalence, median household income (inverted -- lower income means higher vulnerability), and poverty rate. A community where residents cannot drive to find a signal, have no fixed broadband fallback, or lack financial resources to purchase backup power is meaningfully more affected by the same outage.
 
-Each indicator is normalized within the study area using z-scores mapped through the standard normal CDF, which produces values bounded between 0 and 1 with the statewide mean at 0.5. This approach is more robust to outliers than simple min-max scaling and preserves the relative spacing of the underlying distributions. Missing values are imputed with the study area median. The three sub-indices are then combined using the weights above into the final HABRI score.
+Each indicator is normalized within the relevant study area using z-scores mapped through the standard normal CDF, which produces values bounded between 0 and 1 with the scope mean at 0.5. This approach is more robust to outliers than simple min-max scaling and preserves the relative spacing of the underlying distributions. Missing values are imputed with the study area median. The three sub-indices are then combined using the weights above into the final HABRI score.
+
+That normalization rule matters for interpretation:
+
+- The **North Carolina baseline** is relative to the 2,660 NC tracts.
+- The **Tennessee baseline** is relative to the 1,701 TN tracts.
+- The **NC+TN standardized layer** performs a second-pass shared standardization across both completed state baselines so one combined map can be read on a single cross-state scale.
 
 
 Validation
@@ -49,3 +60,14 @@ The index was validated against three independent sources of real outage data fr
 Post-Disaster Recovery Monitoring
 
 Because HABRI updates quarterly using new Ookla speedtest data, it can also track how well communities recover after a disaster. Analysis of six quarters from Q3 2024 through Q4 2025 shows that WNC counties most affected by Helene — especially Henderson — remained elevated above pre-storm baselines more than a year after landfall. This makes HABRI useful not just for pre-disaster targeting but also for directing recovery resources to communities where infrastructure has not yet returned to baseline.
+
+
+Cross-State Extension
+
+The repository now includes:
+
+- a full Tennessee statewide HABRI pipeline (`scripts/build_habri_tn.py`)
+- WNC vs. Eastern Tennessee Helene comparison figures (`scripts/compare_helene_nc_tn.py`)
+- a combined NC+TN standardized layer (`scripts/build_habri_nc_tn_combined.py`)
+
+The combined layer is intended for unified regional mapping. It preserves each tract's original within-state score in `*_state` columns and recomputes the main `H_E`, `I_F`, `C_C`, and `HABRI` columns on a shared NC+TN scale.
