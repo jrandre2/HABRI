@@ -1,365 +1,216 @@
 # HABRI — Hazard-Adjusted Broadband Reliability Index
 
-**A data-driven tool for identifying communities at highest risk of losing internet and cellular service during natural disasters.**
+**Identifying the communities most likely to lose phone and internet service during a natural disaster — before the next storm hits.**
+
+> For a comprehensive overview of the project, methodology, and results, see the
+> [HABRI Report (PDF)](docs/HABRI%20Report.pdf).
 
 ---
 
-## Why This Matters
+## The Problem
 
 When Hurricane Helene struck Western North Carolina in September 2024, entire communities lost phone and internet service for days or weeks. Emergency calls couldn't go through. Families couldn't reach loved ones. Relief coordinators couldn't communicate with the people who needed help most.
 
 The hardest-hit areas weren't random. They were communities where environmental hazards, fragile infrastructure, and socioeconomic vulnerability overlapped — places that were predictably at risk, if anyone had been looking.
 
-**HABRI is that look.** It combines publicly available data on natural hazards, broadband infrastructure, and community demographics into a single score that answers one question: *Where is communications failure most likely during the next disaster?*
-
-The goal is to help planners, emergency managers, and policymakers direct resources — backup generators, fiber route improvements, mobile cell towers — to the places that need them most, *before* the next storm.
+**HABRI is that look.** It combines publicly available data on natural hazards, broadband infrastructure, and community demographics into a single score for every census tract in the study area. The goal: help planners, emergency managers, and policymakers direct resources — backup generators, fiber route improvements, mobile cell towers — to the places that need them most, *before* the next storm.
 
 ---
 
-## Study Area
+## Where We've Mapped
 
-The repository now supports three related spatial products:
+| Region | Coverage | Tracts |
+|--------|----------|--------|
+| **North Carolina** | All 100 counties | 2,660 |
+| **Tennessee** | All 95 counties | 1,701 |
+| **NC + TN Combined** | Shared standardized scale | 4,361 |
 
-- **North Carolina baseline**: all 100 counties (2,660 census tracts), expanded from the original 6-county Western NC pilot.
-- **Tennessee baseline**: all 95 counties (1,701 census tracts), built with the same HABRI framework for cross-state comparison.
-- **NC+TN standardized layer**: a combined 4,361-tract layer on a shared second-pass standardized scale for unified mapping across both states.
+The methodology is designed to work for any U.S. state using the same freely available data sources.
 
-The western North Carolina mountain region most severely impacted by Hurricane Helene remains the primary validation case study. Eastern Tennessee serves as the cross-state comparison extension.
-
-The methodology is designed to be replicable for any state or region in the United States using the same freely available data sources.
+![Combined NC and TN HABRI map on a shared standardized scale](docs/images/habri_nc_tn_standardized.png)
+*HABRI scores across North Carolina and Tennessee. Darker areas face higher risk of communications failure during a disaster. Yellow areas are lower risk.*
 
 ---
 
-## How the Index Works
+## How the Score Works
 
-HABRI produces a score between 0 and 1 for every census tract in the study area, where **higher scores indicate greater risk** of prolonged communications failure during a disaster. The score combines three dimensions of risk:
-
-### The Three Pillars of Risk
+Every census tract gets a score between **0** (lowest risk) and **1** (highest risk). The score combines three dimensions:
 
 ```
 HABRI = 40% Hazard Exposure + 35% Infrastructure Fragility + 25% Coping Capacity Deficit
 ```
 
-#### 1. Hazard Exposure (40% of score)
+### Hazard Exposure (40%)
 
 *How likely is this area to experience a severe natural disaster?*
 
-This component draws on FEMA's National Risk Index, which estimates risk levels for every census tract in the country. For North Carolina, three hazard types are most relevant:
+Uses FEMA's National Risk Index to measure exposure to **inland flooding** (40%), **hurricanes** (35%), and **landslides** (25%) — the three hazard types most relevant to broadband infrastructure in these regions.
 
-- **Inland flooding** (40%) — The primary cause of infrastructure damage during Helene
-- **Hurricanes** (35%) — Wind damage to towers, power lines, and above-ground fiber
-- **Landslides** (25%) — Slope failures that sever roads and buried cable routes
-
-#### 2. Infrastructure Fragility (35% of score)
+### Infrastructure Fragility (35%)
 
 *How vulnerable is the communications infrastructure itself?*
 
-This component measures the physical resilience of the broadband and cellular network using four indicators:
+Measures the physical resilience of the broadband and cellular network through four indicators:
 
-- **Cell tower scarcity** (25%) — Areas with fewer towers per square mile have less redundancy; if one tower goes down, there may be no backup
-- **Broadband latency** (25%) — Higher baseline latency (the delay in internet response times) indicates overloaded or poorly maintained network infrastructure that is more likely to degrade under stress
-- **Road network bottlenecks** (30%) — Areas where all traffic funnels through a single road or bridge are vulnerable to isolation if that route is severed; this also affects the fiber and cable routes that follow road corridors
-- **Power grid exposure** (20%) — Areas with sparse transmission-line coverage depend on long distribution runs that are more vulnerable to storm damage, and losing grid power directly causes broadband outages
+- **Cell tower density** — Fewer towers means less backup if one goes down
+- **Broadband latency** — Higher baseline delay suggests overloaded or poorly maintained networks
+- **Road network bottlenecks** — Where all traffic funnels through one road, fiber and cable running along that route are vulnerable too
+- **Power grid exposure** — Sparse transmission lines mean longer, more storm-vulnerable distribution runs
 
-#### 3. Coping Capacity Deficit (25% of score)
+### Coping Capacity Deficit (25%)
 
-*How well can the community cope when communications go down?*
+*How well can the community cope when service goes down?*
 
-This component uses U.S. Census data to identify populations that are disproportionately affected by service outages:
-
-- **No vehicle access** (20%) — Cannot drive to reach cell service or an emergency shelter
-- **Mobile-only internet** (20%) — Relies entirely on cellular networks with no fixed broadband fallback
-- **Disability prevalence** (20%) — May have mobility, sensory, or cognitive barriers to adapting when service is lost
-- **Low household income** (20%) — Fewer financial resources to purchase backup power, satellite phones, or relocate temporarily
-- **Poverty rate** (20%) — Concentrated economic hardship that compounds all other vulnerabilities
+Uses U.S. Census data to identify populations disproportionately affected by outages: households without vehicles, those relying solely on mobile internet, people with disabilities, and communities with lower incomes and higher poverty rates.
 
 ---
 
-## Key Findings
+## What We Found
 
-The findings in this section refer to the **North Carolina baseline** unless a file or layer is explicitly identified as Tennessee or combined NC+TN.
+### North Carolina Risk Landscape
 
-### Overall Risk Landscape
+HABRI scores across the 2,660 NC tracts range from 0.17 to 0.82. The highest-risk areas cluster in **rural eastern counties** (flood exposure, sparse infrastructure, high poverty) and **western mountain counties** (landslide risk, road bottlenecks, power dependence).
 
-HABRI scores across the 2,660 census tracts range from 0.168 to 0.822 (mean 0.496, SD 0.108). The highest-risk tracts are concentrated in rural eastern and western counties:
+![Four-panel map showing each HABRI component and the composite score for all NC tracts](docs/images/habri_statewide_4panel.png)
+*Each panel shows a different dimension of risk. The bottom-right panel is the composite HABRI score that combines all three. Western NC counties outlined in black were most severely affected by Hurricane Helene.*
 
-- **Bertie County** (mean HABRI 0.73) — Highest county-level risk, combining flood exposure with sparse infrastructure and high poverty
-- **Lee County** (mean HABRI 0.70) — High hazard exposure and infrastructure fragility
-- **Gates County** (mean HABRI 0.67) — Remote rural area with limited tower coverage and road redundancy
-- **Warren County** (mean HABRI 0.67) — Dual-risk tracts with high vulnerability on both power-dependence and transport-fragility axes
+### Three Types of Vulnerable Communities
 
-### Vulnerability Profiles
+Statistical clustering reveals that vulnerable communities fall into three distinct profiles — each suggesting different investments:
 
-Using statistical clustering, every tract is classified into one of three risk profiles — each suggesting a different type of investment:
+| Profile | Share of Tracts | What It Means | What Would Help |
+|---------|----------------|---------------|-----------------|
+| **Power-Dependent** | 51% | Risk driven primarily by power grid vulnerability | Backup generators, battery storage, mobile cell-on-wheels |
+| **Dual-Risk** | 40% | High vulnerability on both power and transport axes | Combined investment: generators + route redundancy |
+| **Transport-Fragile** | 9% | Risk concentrated in road network bottlenecks | Fiber route diversification, microwave links, bridge hardening |
 
-| Profile | Tracts | Mean HABRI | Recommended Interventions |
-|---------|--------|------------|--------------------------|
-| **Power-Dependent** (51%) | 1,359 | 0.44 | Backup generators, battery storage, mobile cell-on-wheels deployment |
-| **Dual-Risk** (40%) | 1,075 | 0.57 | Priority for combined investment: generators + route redundancy |
-| **Transport-Fragile** (9%) | 226 | 0.47 | Fiber route diversification, microwave backup links, bridge hardening |
+---
 
-### Validation Against Hurricane Helene
+## Validated Against Hurricane Helene
 
-The index was validated against real-world outage data from Hurricane Helene (September 2024):
+The index isn't just theoretical. We tested it against real outage data from Hurricane Helene (September 2024) and found that **HABRI successfully predicted where the worst outages occurred**.
 
-**Internet Outage Detection (IODA)** — Georgia Tech's Internet Outage Detection and Analysis project tracked three Western NC internet providers through the storm:
+### Internet Provider Blackouts
 
-- **Morris Broadband** (Henderson County) experienced 80 hours of complete BGP blackout — their entire network disappeared from the global internet
-- **Skyline Telephone** (Mitchell/Avery counties) and **Wilkes Communications** (Wilkes/Ashe counties) maintained BGP visibility but showed degraded active probing metrics
-- These real outage patterns align with the areas HABRI identifies as highest-risk
+Georgia Tech's IODA project tracked three Western NC internet providers through the storm:
 
-**Broadband Performance Degradation** — Comparing Ookla speedtest data from before Helene (Q3 2024, 123,435 tiles) to after (Q4 2024, 127,192 tiles), HABRI showed a statistically significant correlation with absolute latency change (Spearman rho = -0.113, p < 0.001, n = 2,650 tracts). The Infrastructure Fragility sub-index was the strongest predictor (rho = -0.216, p < 0.001).
+- **Morris Broadband** (Henderson County) experienced 80 hours of complete blackout — their entire network disappeared from the global internet
+- **Skyline Telephone** and **Wilkes Communications** maintained partial visibility but showed significant degradation
 
-**FCC Cell Site Outages** — The FCC activated DIRS for 21 western NC counties during Helene. County-level HABRI scores correlate significantly with FCC-reported cell site outage percentages (Spearman rho = 0.236, p = 0.018, n = 100 counties). Counties with higher HABRI scores had higher outage rates, validating the index's predictive value.
+These providers serve areas HABRI identified as highest-risk.
+
+![IODA internet outage timelines for three WNC providers during Hurricane Helene](docs/images/ioda_outage_timeseries.png)
+*Internet outage monitoring data from Georgia Tech's IODA project. The red shaded area marks Hurricane Helene's landfall. Morris Broadband (top) went completely dark for over three days.*
+
+### Cell Site Outages Match HABRI Predictions
+
+The FCC activated emergency reporting for 21 western NC counties during Helene. Counties with higher HABRI scores had higher cell site outage rates (Spearman rho = 0.236, p = 0.018).
+
+![Scatter plot showing correlation between HABRI scores and FCC-reported cell site outages](docs/images/fcc_county_validation.png)
+*Left: Each dot is one NC county. Counties with higher HABRI scores experienced more cell site outages during Helene. Right: HABRI sub-index breakdown for the 21 counties that reported outages.*
+
+---
+
+## Tracking Recovery Over Time
+
+HABRI isn't just a one-time snapshot. Using quarterly broadband performance data, we track how communities recover after a disaster.
+
+### Western NC: 15 Months After Helene
+
+![Line chart showing HABRI trends for WNC counties from Q3 2024 through Q4 2025](docs/images/habri_timeseries_wnc.png)
+*HABRI scores for the six most-affected WNC counties over six quarters. The pink band marks Hurricane Helene. Most counties showed initial improvement but several remain elevated above the statewide average (dashed line) more than a year later.*
+
+### Which Communities Recover Fastest?
+
+![Scatter plot of baseline vs Q4 2025 HABRI scores for WNC tracts, colored by vulnerability profile](docs/images/habri_recovery_scatter.png)
+*Each dot is a WNC census tract. Dots above the dashed line haven't fully recovered to their pre-Helene baseline. Dual-Risk tracts (yellow) tend to cluster above the line, indicating the slowest recovery.*
+
+---
+
+## Cross-State Comparison: Western NC vs. Eastern Tennessee
+
+Hurricane Helene affected both sides of the Appalachian mountains. We built the same index for Tennessee to enable direct comparison.
+
+![Side-by-side maps of Western NC and Eastern TN HABRI scores in Hurricane Helene impact areas](docs/images/habri_wnc_etn_map.png)
+*Pre-disaster HABRI scores for the areas most affected by Hurricane Helene. Both regions show pockets of high vulnerability, but the risk profiles differ — WNC has more transport-fragile tracts while Eastern TN has more power-dependent ones.*
 
 ---
 
 ## Data Sources
 
-All data used in this project is publicly available and free to access:
+All data is publicly available and free to access:
 
-| Data Source | What It Provides | Provider |
-|-------------|-----------------|----------|
-| **FEMA National Risk Index** | Flood, hurricane, and landslide risk scores for every census tract | Federal Emergency Management Agency |
-| **HIFLD Cellular Towers** | Locations of cell towers nationwide | Homeland Infrastructure Foundation-Level Data |
-| **HIFLD Electric Transmission Lines** | High-voltage transmission line routes and density | Homeland Infrastructure Foundation-Level Data |
-| **Ookla Speedtest Open Data** | Broadband download/upload speeds and latency, measured by real users | Ookla (published under open data license) |
-| **FCC Broadband Data Collection** | Fixed broadband availability by technology type at each address | Federal Communications Commission |
-| **Census ACS 5-Year Estimates** | Demographics including income, vehicle access, disability, internet type | U.S. Census Bureau |
-| **OpenStreetMap Road Network** | Road connectivity and routing topology | OpenStreetMap contributors |
-| **IODA Outage Detection** | Real-time internet outage monitoring via BGP and active probing | Georgia Tech Internet Intelligence Lab |
-| **FCC Communications Status Reports** | Cell site outage counts during declared disasters | Federal Communications Commission |
-
----
-
-## Outputs and Deliverables
-
-The analysis produces several outputs, all stored in the `data/processed/` folder.
-
-January 2026 updates are modeled as **versioned current-conditions layers** so the published baseline remains unchanged.
-
-| File | Description |
-|------|-------------|
-| `habri_composite.csv` | North Carolina baseline tract-level results: HABRI scores, sub-index scores, vulnerability profiles |
-| `habri_composite.gpkg` | Same NC baseline data as a geospatial file (GeoPackage) for use in GIS software |
-| `habri_tn_composite.csv` | Tennessee baseline tract-level results built with the same HABRI framework |
-| `habri_tn_composite.gpkg` | Same Tennessee baseline data as a geospatial file |
-| `habri_nc_tn_standardized.csv` | Combined NC+TN tract-level layer with shared-scale `H_E`, `I_F`, `C_C`, and `HABRI` scores plus preserved state-local `*_state` columns |
-| `habri_nc_tn_standardized.gpkg` | Same combined NC+TN standardized layer as a geospatial file |
-| `habri_map.html` | Interactive web map — open in any browser to explore tracts, scores, and profiles |
-| `habri_nc_tn_standardized.html` | Interactive web map for the combined NC+TN shared-scale layer |
-| `habri_statewide_4panel.png` | Statewide publication-quality map showing all four indicators and the composite score for all 2,660 NC tracts |
-| `habri_tn_statewide_4panel.png` | Tennessee statewide four-panel HABRI map |
-| `habri_nc_tn_standardized.png` | Single-panel combined NC+TN shared-scale HABRI map |
-| `habri_nc_tn_standardized_4panel.png` | Four-panel combined NC+TN shared-scale map |
-| `habri_4panel.png` | Zoomed publication-quality map of Land of the Sky counties (Buncombe, Henderson, Madison, Transylvania) |
-| `habri_profiles.png` | Vulnerability profile map for Land of the Sky counties |
-| `habri_tn_profiles.png` | Vulnerability profile map for Eastern Tennessee Helene-affected counties |
-| `habri_timeseries_statewide.png` | Quarterly trend line (Q3 2024 – Q4 2025) for statewide mean HABRI and sub-indices |
-| `habri_timeseries_wnc.png` | WNC county HABRI trajectories vs. NC statewide mean, showing Helene impact and recovery |
-| `habri_timeseries_profiles.png` | Stacked bar showing fraction of tracts in each risk profile per quarter |
-| `habri_recovery_scatter.png` | Scatter of baseline vs. Q4 2025 HABRI for WNC tracts, colored by risk profile |
-| `ioda_outage_timeseries.png` | Timeline of internet outages for three WNC providers during Hurricane Helene |
-| `fcc_county_validation.png` | Comparison of HABRI scores against FCC-reported cell site outages by county |
-| `road_proxy_validation.png` | Scatter of road fragility vs. fixed and mobile latency degradation (Helene Q3→Q4) |
-| `fcc_bdc_wired_fraction.csv` | FCC BDC-derived p_wired per tract (fraction of fixed broadband coverage that is wired) |
-| `habri_current_2026_01.csv` | Versioned current-conditions HABRI layer for January 2026 |
-| `habri_current_2026_01.gpkg` | Same as above with geometry |
+| Source | What It Provides |
+|--------|-----------------|
+| [FEMA National Risk Index](https://hazards.fema.gov/nri/) | Flood, hurricane, and landslide risk scores |
+| [HIFLD Open Data](https://hifld-geoplatform.hub.arcgis.com/) | Cell tower locations and electric transmission lines |
+| [Ookla Open Data](https://www.ookla.com/ookla-for-good/open-data) | Broadband speeds and latency from real user tests |
+| [FCC Broadband Data Collection](https://broadbandmap.fcc.gov/) | Fixed broadband availability by technology type |
+| [U.S. Census ACS](https://www.census.gov/programs-surveys/acs) | Demographics: income, vehicles, disability, internet type |
+| [OpenStreetMap](https://www.openstreetmap.org/) | Road network connectivity and routing |
+| [IODA (Georgia Tech)](https://ioda.inetintelligence.org/) | Real-time internet outage monitoring |
+| [FCC Disaster Reports](https://www.fcc.gov/general/disaster-information-reporting-system-dirs) | Cell site outage counts during declared disasters |
 
 ---
 
-## How to Read the Results
+## Outputs
 
-### The CSV File
+The analysis produces downloadable data files, interactive maps, and publication-quality figures:
 
-The main results file (`habri_composite.csv`) contains one row per census tract with these key columns:
+- **CSV and GeoPackage files** — Tract-level HABRI scores, sub-indices, and vulnerability profiles for NC, TN, and the combined layer
+- **Interactive web maps** — Open in any browser to explore tracts, hover for details, and toggle layers
+- **Static maps** — Publication-ready four-panel choropleths and profile maps
+- **Time-series charts** — Quarterly HABRI trends showing disaster impact and recovery
+- **Streamlit dashboard** — Run `streamlit run app.py` for an interactive exploration tool
 
-| Column | Meaning |
-|--------|---------|
-| `GEOID` | Census tract identifier (11-digit FIPS code) |
-| `HABRI` | Overall risk score (0–1, higher = more at risk) |
-| `H_E` | Hazard Exposure sub-score |
-| `I_F` | Infrastructure Fragility sub-score |
-| `C_C` | Coping Capacity Deficit sub-score |
-| `HABRI_quintile` | Risk tier: Very Low, Low, Moderate, High, or Very High |
-| `risk_profile` | Vulnerability type: Power-Dependent, Transport-Fragile, or Dual-Risk |
+---
 
-For cross-state comparison, use `habri_nc_tn_standardized.csv` / `.gpkg`. In that layer:
+## Getting Started
 
-- `H_E`, `I_F`, `C_C`, and `HABRI` are re-standardized on a shared NC+TN scale
-- `H_E_state`, `I_F_state`, `C_C_state`, and `HABRI_state` preserve the original within-state baseline values
-- `standardization_scope = nc_tn_joint` identifies the shared-scale product
+### Explore the Results
 
-### The Interactive Map
+The easiest way to explore HABRI is to open the interactive map:
 
-Open `habri_map.html` in a web browser to explore the results visually. The map includes toggleable layers:
+1. Download or clone this repository
+2. Open `data/processed/habri_map.html` in a web browser (NC) or `habri_nc_tn_standardized.html` (NC+TN)
+3. Hover over any tract to see its HABRI score and risk profile
 
-- **HABRI Score** — Color-coded choropleth from yellow (low risk) to dark red (high risk)
-- **Risk Profiles** — Color-coded by vulnerability type (red = Power-Dependent, blue = Transport-Fragile, purple = Dual-Risk)
-- **Cellular Towers** — Blue dots showing cell tower locations
-
-Hover over any tract to see its ID, risk profile, and HABRI score.
-
-The Streamlit dashboard (`streamlit run app.py`) can now switch between the **North Carolina baseline** and the **NC + TN standardized** layer from the sidebar.
-
-### Current-conditions January 2026 Run (Optional)
-
-To produce the versioned current-conditions output without changing the published baseline:
+Or launch the dashboard:
 
 ```bash
-python scripts/build_habri_current_2026_01.py \
-  --input-csv /path/FixedNetworkPerformance_54196_2026-01-01.csv \
-  --version-tag 2026_01 \
-  --max-location-accuracy-m 75
-
-python scripts/build_ookla_jan_2026_validation.py \
-  --input-csv /path/FixedNetworkPerformance_54196_2026-01-01.csv \
-  --version-tag 2026_01 \
-  --max-location-accuracy-m 75
-```
-
-You can also set `OOKLA_JAN2026_CSV` in your shell to avoid repeating `--input-csv`.
-
-By default, `--max-location-accuracy-m` is disabled, so all rows with available location and latency fields are included. When set, rows with `attr_location_accuracy_m` above the threshold are filtered out.
-
-The baseline files `habri_composite.csv` and `habri_composite.gpkg` remain unchanged; current-conditions outputs are intentionally separated by version tag.
-
-### Technical Reproducibility with Notebooks
-
-- The four notebooks reproduce the **North Carolina baseline** end to end.
-- Tennessee is built with `scripts/build_habri_tn.py`, which mirrors the same logic in a resumable script form.
-- The shared NC+TN map is built with `scripts/build_habri_nc_tn_combined.py` after both state baselines exist.
-
----
-
-## Methodology Notes
-
-### Weight Selection
-
-The weights assigned to each component (40/35/25 for the three pillars; sub-weights within each pillar) reflect the relative importance of each factor for communications resilience, informed by disaster communications literature and post-Helene field reports.
-
-A **sensitivity analysis** tested five different weight configurations (equal weights, hazard-dominant, infrastructure-dominant, community-dominant, and the default). The tract rankings remained highly correlated across all configurations (Spearman rank correlation > 0.85), meaning the results are robust — the same communities emerge as highest-risk regardless of the exact weight choices.
-
-### Normalization
-
-All indicators are z-score normalized within the relevant study scope and mapped to [0, 1] via the standard normal CDF. This approach is more robust to outliers than min-max normalization and maps the scope mean to 0.5. For the baseline NC layer, scores represent *relative* risk among the 2,660 NC tracts. For the Tennessee baseline, they represent relative risk among the 1,701 TN tracts. The combined `habri_nc_tn_standardized.*` layer performs a second-pass shared standardization across the union of both state baselines so the resulting map can be interpreted on one cross-state scale. Road edges are assigned to tracts via midpoint interpolation to avoid double-counting edges that cross tract boundaries.
-
-### Limitations
-
-- **Temporal snapshot**: Infrastructure and demographic data reflect a single point in time (2022–2024) and will need periodic updates; the quarterly Ookla refresh addresses the latency component
-- **Proxy measures**: Cell tower density, transmission-line density, and road centrality are proxies for true network topology, which is proprietary information held by carriers; road centrality is empirically validated against fixed broadband degradation (Helene, ρ = −0.287, p < 0.001) but not mobile degradation
-- **Study area scope**: The baseline NC and TN outputs are normalized within each state independently. Use `habri_nc_tn_standardized.*` for the shared NC+TN map; do not compare the raw state baselines across states directly.
-- **BDC adaptive weighting**: The FCC BDC data (Jun 2025 filing) adjusts I_F weights toward tower density for wireless-dominant tracts and toward road centrality for wired-dominant tracts; weights remain uniform for any tract where BDC coverage data is unavailable
-
----
-
-## Project Structure
-
-```
-HABRI/
-├── data/
-│   ├── raw/                    # Downloaded source data (not modified)
-│   └── processed/              # Analysis outputs (scores, maps, charts)
-├── docs/
-│   ├── DATA_DICTIONARY.md      # Column-level definitions for all data files
-│   ├── HABRI_EXPLAINED.md      # Plain-language summary of the index
-│   ├── METHODOLOGY.md          # Formulas, statistical methods, design decisions
-│   ├── article_outline.md      # Manuscript outline (Telecommunications Policy)
-│   ├── manuscript_draft.md     # Manuscript draft
-│   └── CONTRIBUTING.md         # Developer setup, architecture, extending HABRI
-├── notebooks/
-│   ├── 01_data_acquisition     # Downloads and caches all data sources
-│   ├── 02_hazard_processing    # Computes Hazard Exposure (H_E)
-│   ├── 03_infra_proxy_gen      # Computes NC Infrastructure Fragility intermediates
-│   └── 04_index_calculation    # Computes Coping Capacity (C_C), assembles
-│                               #   HABRI, profiles tracts, validates, maps
-├── scripts/
-│   ├── fetch_power_grid.py         # HIFLD transmission line density → power_grid_norm
-│   ├── fetch_fcc_bdc.py            # FCC BDC wired availability → p_wired per tract
-│   ├── integrate_power_grid.py     # Add power grid to I_F; adaptive BDC weights; regen baseline
-│   ├── update_ookla_quarterly.py   # Automated S3 quarterly HABRI refresh
-│   ├── validate_road_proxy_mobile.py  # Fixed vs. mobile latency validation of road proxy
-│   ├── plot_time_series.py         # Multi-quarter HABRI trend figures (WNC recovery)
-│   ├── plot_habri_maps.py          # Regenerate all static and interactive HABRI maps
-│   ├── build_habri_tn.py           # Tennessee statewide HABRI pipeline
-│   ├── compare_helene_nc_tn.py     # WNC vs Eastern TN Helene comparison figures
-│   ├── build_habri_nc_tn_combined.py   # Shared-scale NC+TN combined layer + maps
-│   ├── build_habri_current_2026_01.py   # Versioned current-conditions HABRI (Jan 2026)
-│   ├── build_ookla_jan_2026_validation.py  # Validation against baseline
-│   └── build_site.py               # GitHub Pages static site builder
-├── src/
-│   ├── config.py               # All project settings and constants
-│   ├── utils.py                # Shared helper functions (normalization, imputation, etc.)
-│   ├── region.py               # RegionConfig dataclass for multi-state parameterization
-│   └── combined.py             # Schema harmonization + shared NC/TN standardization helpers
-├── app.py                      # Streamlit dashboard
-├── requirements.txt            # Python package dependencies
-├── research_spec.md            # Original research specification
-└── README.md                   # This file
-```
-
-The four notebooks run sequentially for the **North Carolina baseline** — each depends on outputs from the previous one. The full NC notebook pipeline takes approximately 2–4 hours to run from scratch (the road network download and betweenness centrality computation are the bottlenecks). Tennessee and shared NC+TN products are built by the dedicated scripts listed above.
-
----
-
-## Further Documentation
-
-| Document | Audience | Contents |
-| -------- | -------- | -------- |
-| [Data Dictionary](docs/DATA_DICTIONARY.md) | Analysts, data users | Column-by-column definitions for every input and output file, data types, value ranges, provenance |
-| [HABRI Explained](docs/HABRI_EXPLAINED.md) | General audience | Plain-language summary of what HABRI is, what data it uses, and how it was validated |
-| [Methodology](docs/METHODOLOGY.md) | Researchers, reviewers | Complete formulas, statistical methods, normalization approach, design decision rationale |
-| [Contributing Guide](docs/CONTRIBUTING.md) | Developers | Environment setup, architecture, how to extend HABRI to new regions or add new indicators |
-
----
-
-## For Technical Users
-
-### Reproducing the Analysis
-
-```bash
-# 1. Clone the repository and install dependencies
 pip install -r requirements.txt
-
-# 2. (Optional) Add a Census API key to .env for higher rate limits
-echo "CENSUS_API_KEY=your_key" > .env
-
-# 3. Download the FEMA NRI CSV manually (see Notebook 01 for instructions)
-#    Place at: data/raw/NRI_Table_CensusTracts.csv
-
-# 4. Run notebooks in order
-jupyter notebook notebooks/01_data_acquisition.ipynb
-# Then 02, 03, 04
-
-# 5. Optional: regenerate January 2026 current-conditions comparison from a fixed-network export
-python scripts/build_habri_current_2026_01.py --version-tag 2026_01
-python scripts/build_ookla_jan_2026_validation.py --version-tag 2026_01
-
-# 6. Optional: build Tennessee and the shared NC+TN layer
-python scripts/build_habri_tn.py
-python scripts/build_habri_nc_tn_combined.py
-
-# 7. Optional: launch the dashboard
 streamlit run app.py
 ```
 
-### Coordinate Reference System
+### Reproduce the Analysis
 
-Processing CRS depends on the layer:
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-- **NC baseline**: `EPSG:2264` (NAD83 / North Carolina, US survey feet)
-- **TN baseline**: `EPSG:2274` (NAD83 / Tennessee, US survey feet)
-- **Combined NC+TN standardized layer**: saved in `EPSG:4326` for cross-state web mapping
+# Run the NC baseline notebooks in order (01 through 04)
+jupyter notebook notebooks/01_data_acquisition.ipynb
 
-For the state-plane layers, 1 km² = 10,763,910.4 square feet.
+# Build Tennessee
+python scripts/build_habri_tn.py
 
-### Extending to Other Regions
+# Build the combined NC+TN layer
+python scripts/build_habri_nc_tn_combined.py
+```
 
-To apply HABRI to a different region:
+The full NC pipeline takes 2-4 hours from scratch (road network download and centrality computation are the bottlenecks). See the [Contributing Guide](docs/CONTRIBUTING.md) for detailed setup instructions.
 
-1. Update the county FIPS codes in `src/config.py` or add a dedicated `RegionConfig` in `src/region.py`
-2. Re-run the notebooks — all data sources are fetched programmatically (except the FEMA NRI CSV, which requires a one-time manual download)
-3. Consider adjusting hazard weights if the region faces different primary threats (e.g., wildfire instead of landslide)
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [HABRI Report (PDF)](docs/HABRI%20Report.pdf) | Comprehensive report covering methodology, results, and policy implications |
+| [HABRI Explained](docs/HABRI_EXPLAINED.md) | Plain-language summary for a general audience |
+| [Methodology](docs/METHODOLOGY.md) | Complete formulas, statistical methods, and design decisions |
+| [Data Dictionary](docs/DATA_DICTIONARY.md) | Column-by-column definitions for every data file |
+| [Contributing](docs/CONTRIBUTING.md) | Developer setup and how to extend HABRI to new regions |
 
 ---
 

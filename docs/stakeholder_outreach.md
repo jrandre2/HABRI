@@ -62,7 +62,7 @@ HABRI draws on FEMA's National Risk Index, HIFLD cellular infrastructure data, O
 **Attachments / Links:**
 - Project overview and interactive map: https://jrandre2.github.io/HABRI/
 - Full data and methodology: https://github.com/jrandre2/HABRI
-- Methodology documentation: [GitHub link to docs/METHODOLOGY.md]
+- Methodology documentation: https://github.com/jrandre2/HABRI/blob/main/docs/METHODOLOGY.md
 
 I would be glad to provide a county-level briefing or to generate a custom HABRI report for any specific county or region of interest. Please reach out at jesseand@ttu.edu.
 

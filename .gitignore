@@ -40,6 +40,10 @@ cache/
 # Claude Code
 .claude/
 
+# Documentation images (allow through despite data/processed ignores)
+!docs/images/
+!docs/images/*.png
+
 # OS
 .DS_Store
 Thumbs.db
