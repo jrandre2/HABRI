@@ -33,6 +33,12 @@ data/processed/*.pdf
 data/processed/*.jpg
 data/processed/*.parquet
 
+# Caches
+cache/
+
+# Claude Code
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

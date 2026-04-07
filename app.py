@@ -23,6 +23,7 @@ from src.config import (
     W_INFRA_FRAGILITY,
     W_COPING_CAPACITY,
 )
+from src.combined import load_joint_standardized_habri
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -36,18 +37,33 @@ st.set_page_config(
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 @st.cache_data
-def load_habri() -> gpd.GeoDataFrame:
-    path = DATA_PROCESSED / "habri_composite.gpkg"
-    if not path.exists():
-        st.error(f"Baseline data not found: {path}\nRun Notebook 04 to generate outputs.")
-        st.stop()
-    gdf = gpd.read_file(path)
+def load_habri(dataset_mode: str) -> gpd.GeoDataFrame:
+    if dataset_mode == "North Carolina baseline":
+        path = DATA_PROCESSED / "habri_composite.gpkg"
+        if not path.exists():
+            st.error(f"Baseline data not found: {path}\nRun Notebook 04 to generate outputs.")
+            st.stop()
+        gdf = gpd.read_file(path)
+        gdf["GEOID"] = gdf["GEOID"].astype(str).str.zfill(11)
+        gdf["county_fips"] = gdf["GEOID"].str[2:5]
+        gdf["state_fips"] = gdf["GEOID"].str[:2]
+        gdf["state_abbr"] = "NC"
+        gdf["state_name"] = "North Carolina"
+        fips_to_name = {v: k for k, v in COUNTY_FIPS.items()}
+        gdf["county_name"] = gdf["county_fips"].map(fips_to_name).fillna("Unknown")
+        gdf["county_label"] = gdf["county_name"]
+        return gdf.to_crs(CRS_WGS84)
+
+    path = DATA_PROCESSED / "habri_nc_tn_standardized.gpkg"
+    gdf = gpd.read_file(path) if path.exists() else load_joint_standardized_habri()
     gdf["GEOID"] = gdf["GEOID"].astype(str).str.zfill(11)
-    gdf["county_fips"] = gdf["GEOID"].str[2:5]
-    gdf["state_fips"] = gdf["GEOID"].str[:2]
-    # Build county name lookup from FIPS
-    fips_to_name = {v: k for k, v in COUNTY_FIPS.items()}
-    gdf["county_name"] = gdf["county_fips"].map(fips_to_name).fillna("Unknown")
+    if "county_name" not in gdf.columns:
+        gdf["county_name"] = "Unknown"
+    if "state_abbr" not in gdf.columns:
+        gdf["state_abbr"] = gdf["GEOID"].str[:2].map({"37": "NC", "47": "TN"}).fillna("NA")
+    if "state_name" not in gdf.columns:
+        gdf["state_name"] = gdf["state_abbr"].map({"NC": "North Carolina", "TN": "Tennessee"}).fillna("Unknown")
+    gdf["county_label"] = gdf["county_name"] + ", " + gdf["state_abbr"]
     return gdf.to_crs(CRS_WGS84)
 
 
@@ -65,17 +81,27 @@ def load_current() -> gpd.GeoDataFrame | None:
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 st.sidebar.title("HABRI Explorer")
+dataset_mode = st.sidebar.radio(
+    "Dataset",
+    ["North Carolina baseline", "NC + TN standardized"],
+    index=0,
+)
 st.sidebar.markdown(
     "**Hazard-Adjusted Broadband Reliability Index**  \n"
-    "North Carolina — 2,660 census tracts"
+    + (
+        "North Carolina — 2,660 census tracts"
+        if dataset_mode == "North Carolina baseline"
+        else "North Carolina + Tennessee — shared standardized scale"
+    )
 )
 st.sidebar.markdown("---")
 
-habri = load_habri()
-current = load_current()
+habri = load_habri(dataset_mode)
+current = load_current() if dataset_mode == "North Carolina baseline" else None
+county_filter_col = "county_label" if dataset_mode == "NC + TN standardized" else "county_name"
 
 # County filter
-all_counties = sorted(habri["county_name"].dropna().unique())
+all_counties = sorted(habri[county_filter_col].dropna().unique())
 selected_counties = st.sidebar.multiselect(
     "Filter by county",
     options=all_counties,
@@ -117,7 +143,7 @@ st.sidebar.markdown(
 
 filtered = habri.copy()
 if selected_counties:
-    filtered = filtered[filtered["county_name"].isin(selected_counties)]
+    filtered = filtered[filtered[county_filter_col].isin(selected_counties)]
 if selected_profiles and "risk_profile" in filtered.columns:
     filtered = filtered[filtered["risk_profile"].isin(selected_profiles)]
 if selected_quintiles and "HABRI_quintile" in filtered.columns:
@@ -127,8 +153,13 @@ if selected_quintiles and "HABRI_quintile" in filtered.columns:
 
 st.title("HABRI: Hazard-Adjusted Broadband Reliability Index")
 st.markdown(
-    "Composite risk index identifying NC communities most vulnerable to broadband outages "
-    "during natural disasters. Score range **0–1** (1 = highest risk)."
+    (
+        "Composite risk index identifying NC communities most vulnerable to broadband outages "
+        "during natural disasters. Score range **0–1** (1 = highest risk)."
+        if dataset_mode == "North Carolina baseline"
+        else "Shared-scale HABRI layer across North Carolina and Tennessee. "
+        "Scores are standardized jointly across both states on a **0–1** scale (1 = highest risk)."
+    )
 )
 
 # ── Summary KPIs ──────────────────────────────────────────────────────────────
@@ -143,9 +174,12 @@ col4.metric(
     if "HABRI_quintile" in filtered.columns else "—",
 )
 col5.metric(
-    "Current version",
-    sorted(DATA_PROCESSED.glob("habri_current_*.gpkg"))[-1].stem.replace("habri_current_", "")
-    if sorted(DATA_PROCESSED.glob("habri_current_*.gpkg")) else "Baseline only",
+    "Current version" if dataset_mode == "North Carolina baseline" else "Scale",
+    (
+        sorted(DATA_PROCESSED.glob("habri_current_*.gpkg"))[-1].stem.replace("habri_current_", "")
+        if sorted(DATA_PROCESSED.glob("habri_current_*.gpkg")) else "Baseline only"
+    )
+    if dataset_mode == "North Carolina baseline" else "NC+TN joint",
 )
 
 st.markdown("---")
@@ -180,8 +214,8 @@ with tab_map:
         horizontal=True,
     )
 
-    center = filtered.geometry.centroid.to_crs(CRS_WGS84)
-    map_center = [center.y.mean(), center.x.mean()]
+    minx, miny, maxx, maxy = filtered.total_bounds
+    map_center = [float((miny + maxy) / 2), float((minx + maxx) / 2)]
     m = folium.Map(location=map_center, zoom_start=7, tiles="CartoDB positron")
 
     if map_mode == "HABRI score":
@@ -203,7 +237,8 @@ with tab_map:
                     "fillOpacity": 0.75,
                 },
                 tooltip=folium.Tooltip(
-                    f"<b>{row.get('county_name', '')}</b><br>"
+                    f"<b>{row.get('county_label', row.get('county_name', ''))}</b><br>"
+                    f"State: {row.get('state_name', 'N/A')}<br>"
                     f"GEOID: {row['GEOID']}<br>"
                     f"HABRI: {row['HABRI']:.3f}<br>"
                     f"Profile: {row.get('risk_profile', 'N/A')}"
@@ -224,7 +259,8 @@ with tab_map:
                     "fillOpacity": 0.7,
                 },
                 tooltip=folium.Tooltip(
-                    f"<b>{row.get('county_name', '')}</b><br>"
+                    f"<b>{row.get('county_label', row.get('county_name', ''))}</b><br>"
+                    f"State: {row.get('state_name', 'N/A')}<br>"
                     f"Profile: {row.get('risk_profile', 'N/A')}<br>"
                     f"HABRI: {row['HABRI']:.3f}"
                 ),
@@ -249,26 +285,30 @@ with tab_map:
                     "fillOpacity": 0.75,
                 },
                 tooltip=folium.Tooltip(
-                    f"<b>{row.get('county_name', '')}</b><br>"
+                    f"<b>{row.get('county_label', row.get('county_name', ''))}</b><br>"
+                    f"State: {row.get('state_name', 'N/A')}<br>"
                     f"Quintile: {quintile}<br>"
                     f"HABRI: {row['HABRI']:.3f}"
                 ),
             ).add_to(m)
 
     if show_towers:
-        tower_path = DATA_PROCESSED.parent / "raw" / "hifld_cellular_towers.geojson"
-        if tower_path.exists():
-            towers = gpd.read_file(tower_path)
-            for _, t in towers.iterrows():
-                if t.geometry:
-                    folium.CircleMarker(
-                        location=[t.geometry.y, t.geometry.x],
-                        radius=2,
-                        color="#2ca02c",
-                        fill=True,
-                        fill_opacity=0.6,
-                        tooltip="Cell tower",
-                    ).add_to(m)
+        if dataset_mode != "North Carolina baseline":
+            st.info("Cell tower overlay is only available for the NC baseline layer.")
+        else:
+            tower_path = DATA_PROCESSED.parent / "raw" / "hifld_cellular_towers.geojson"
+            if tower_path.exists():
+                towers = gpd.read_file(tower_path)
+                for _, t in towers.iterrows():
+                    if t.geometry:
+                        folium.CircleMarker(
+                            location=[t.geometry.y, t.geometry.x],
+                            radius=2,
+                            color="#2ca02c",
+                            fill=True,
+                            fill_opacity=0.6,
+                            tooltip="Cell tower",
+                        ).add_to(m)
 
     st_folium(m, width=None, height=580, returned_objects=[])
 
@@ -279,7 +319,7 @@ with tab_table:
 
     display_cols = [
         c for c in [
-            "GEOID", "county_name", "HABRI", "HABRI_quintile",
+            "GEOID", "state_abbr", "county_label", "county_name", "HABRI", "HABRI_quintile",
             "H_E", "I_F", "C_C", "risk_profile",
             "tower_density_norm", "latency_norm", "road_fragility",
             "no_vehicle_vuln", "mobile_only_vuln", "disability_vuln",
@@ -351,7 +391,7 @@ with tab_charts:
 
     st.markdown("**Top 20 Highest-Risk Tracts**")
     top20 = (
-        filtered[["GEOID", "county_name", "HABRI", "H_E", "I_F", "C_C", "risk_profile"]]
+        filtered[[c for c in ["GEOID", "state_abbr", "county_label", "county_name", "HABRI", "H_E", "I_F", "C_C", "risk_profile"] if c in filtered.columns]]
         .nlargest(20, "HABRI")
         .reset_index(drop=True)
     )
@@ -362,7 +402,7 @@ with tab_charts:
 
     st.markdown("**County-Level Summary**")
     county_summary = (
-        filtered.groupby("county_name")
+        filtered.groupby(county_filter_col)
         .agg(
             tracts=("HABRI", "count"),
             mean_habri=("HABRI", "mean"),
@@ -383,7 +423,9 @@ with tab_charts:
 with tab_compare:
     st.subheader("Baseline vs. Current-Conditions Comparison")
 
-    if current is None:
+    if dataset_mode != "North Carolina baseline":
+        st.info("Current-conditions comparison is only available for the NC baseline layer.")
+    elif current is None:
         st.info(
             "No current-conditions layer found in `data/processed/`. "
             "Run `scripts/update_ookla_quarterly.py` to generate a versioned update."

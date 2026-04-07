@@ -48,11 +48,12 @@ This component draws on FEMA's National Risk Index, which estimates risk levels 
 
 *How vulnerable is the communications infrastructure itself?*
 
-This component measures the physical resilience of the broadband and cellular network using three indicators:
+This component measures the physical resilience of the broadband and cellular network using four indicators:
 
-- **Cell tower scarcity** (30%) — Areas with fewer towers per square mile have less redundancy; if one tower goes down, there may be no backup
-- **Broadband latency** (30%) — Higher baseline latency (the delay in internet response times) indicates overloaded or poorly maintained network infrastructure that is more likely to degrade under stress
-- **Road network bottlenecks** (40%) — Areas where all traffic funnels through a single road or bridge are vulnerable to isolation if that route is severed; this also affects the fiber and cable routes that follow road corridors
+- **Cell tower scarcity** (25%) — Areas with fewer towers per square mile have less redundancy; if one tower goes down, there may be no backup
+- **Broadband latency** (25%) — Higher baseline latency (the delay in internet response times) indicates overloaded or poorly maintained network infrastructure that is more likely to degrade under stress
+- **Road network bottlenecks** (30%) — Areas where all traffic funnels through a single road or bridge are vulnerable to isolation if that route is severed; this also affects the fiber and cable routes that follow road corridors
+- **Power grid exposure** (20%) — Areas with sparse transmission-line coverage depend on long distribution runs that are more vulnerable to storm damage, and losing grid power directly causes broadband outages
 
 #### 3. Coping Capacity Deficit (25% of score)
 
@@ -72,7 +73,7 @@ This component uses U.S. Census data to identify populations that are disproport
 
 ### Overall Risk Landscape
 
-HABRI scores across the 2,660 census tracts range from 0.20 to 0.82 (mean 0.49, std 0.11). The highest-risk tracts are concentrated in rural eastern and western counties:
+HABRI scores across the 2,660 census tracts range from 0.168 to 0.822 (mean 0.496, SD 0.108). The highest-risk tracts are concentrated in rural eastern and western counties:
 
 - **Bertie County** (mean HABRI 0.73) — Highest county-level risk, combining flood exposure with sparse infrastructure and high poverty
 - **Lee County** (mean HABRI 0.70) — High hazard exposure and infrastructure fragility
@@ -113,7 +114,9 @@ All data used in this project is publicly available and free to access:
 |-------------|-----------------|----------|
 | **FEMA National Risk Index** | Flood, hurricane, and landslide risk scores for every census tract | Federal Emergency Management Agency |
 | **HIFLD Cellular Towers** | Locations of cell towers nationwide | Homeland Infrastructure Foundation-Level Data |
+| **HIFLD Electric Transmission Lines** | High-voltage transmission line routes and density | Homeland Infrastructure Foundation-Level Data |
 | **Ookla Speedtest Open Data** | Broadband download/upload speeds and latency, measured by real users | Ookla (published under open data license) |
+| **FCC Broadband Data Collection** | Fixed broadband availability by technology type at each address | Federal Communications Commission |
 | **Census ACS 5-Year Estimates** | Demographics including income, vehicle access, disability, internet type | U.S. Census Bureau |
 | **OpenStreetMap Road Network** | Road connectivity and routing topology | OpenStreetMap contributors |
 | **IODA Outage Detection** | Real-time internet outage monitoring via BGP and active probing | Georgia Tech Internet Intelligence Lab |
@@ -132,19 +135,19 @@ January 2026 updates are modeled as **versioned current-conditions layers** so t
 | `habri_composite.csv` | Complete tract-level results: HABRI scores, sub-index scores, vulnerability profiles |
 | `habri_composite.gpkg` | Same data as a geospatial file (GeoPackage) for use in GIS software |
 | `habri_map.html` | Interactive web map — open in any browser to explore tracts, scores, and profiles |
-| `habri_4panel.png` | Publication-quality map showing all three sub-indices and the composite score |
-| `habri_profiles.png` | Map showing vulnerability profile classifications |
+| `habri_statewide_4panel.png` | Statewide publication-quality map showing all four indicators and the composite score for all 2,660 NC tracts |
+| `habri_4panel.png` | Zoomed publication-quality map of Land of the Sky counties (Buncombe, Henderson, Madison, Transylvania) |
+| `habri_profiles.png` | Vulnerability profile map for Land of the Sky counties |
+| `habri_timeseries_statewide.png` | Quarterly trend line (Q3 2024 – Q4 2025) for statewide mean HABRI and sub-indices |
+| `habri_timeseries_wnc.png` | WNC county HABRI trajectories vs. NC statewide mean, showing Helene impact and recovery |
+| `habri_timeseries_profiles.png` | Stacked bar showing fraction of tracts in each risk profile per quarter |
+| `habri_recovery_scatter.png` | Scatter of baseline vs. Q4 2025 HABRI for WNC tracts, colored by risk profile |
 | `ioda_outage_timeseries.png` | Timeline of internet outages for three WNC providers during Hurricane Helene |
 | `fcc_county_validation.png` | Comparison of HABRI scores against FCC-reported cell site outages by county |
-| `habri_current_2026_01.csv` | Versioned current-conditions HABRI layer for January 2026; only latency-driven infrastructure fragility is updated |
+| `road_proxy_validation.png` | Scatter of road fragility vs. fixed and mobile latency degradation (Helene Q3→Q4) |
+| `fcc_bdc_wired_fraction.csv` | FCC BDC-derived p_wired per tract (fraction of fixed broadband coverage that is wired) |
+| `habri_current_2026_01.csv` | Versioned current-conditions HABRI layer for January 2026 |
 | `habri_current_2026_01.gpkg` | Same as above with geometry |
-| `infra_fragility_current_2026_01.gpkg` | January 2026 latency-updated infrastructure fragility layer |
-| `ookla_fixed_2026_01.gpkg` | January 2026 fixed-broadband tile centroids and aggregates |
-| `ookla_tract_2026_01.csv` | January 2026 tract-level Ookla metrics used as intermediate inputs |
-| `ookla_tract_2026_01.gpkg` | Geospatial version of January 2026 tract-level Ookla metrics |
-| `habri_validation_2026_01.csv` | Baseline-vs-January 2026 validation table with delta metrics |
-| `habri_validation_2026_01_summary.csv` | Correlation and median statistic summary for January 2026 scenario |
-| `habri_validation_2026_01.png` | January 2026 validation scatter plots |
 
 ---
 
@@ -214,10 +217,10 @@ All indicators are z-score normalized within the study area and mapped to [0, 1]
 
 ### Limitations
 
-- **Temporal snapshot**: Infrastructure and demographic data reflect a single point in time (2022–2024) and will need periodic updates
-- **Proxy measures**: Cell tower density and road centrality are proxies for true network topology, which is proprietary information held by carriers
+- **Temporal snapshot**: Infrastructure and demographic data reflect a single point in time (2022–2024) and will need periodic updates; the quarterly Ookla refresh addresses the latency component
+- **Proxy measures**: Cell tower density, transmission-line density, and road centrality are proxies for true network topology, which is proprietary information held by carriers; road centrality is empirically validated against fixed broadband degradation (Helene, ρ = −0.287, p < 0.001) but not mobile degradation
 - **Study area scope**: Normalization is local to North Carolina — scores are not directly comparable to other states without re-running the analysis
-- **No power grid data**: Electricity outages are a primary cause of communications failure but are not included due to data availability constraints
+- **BDC adaptive weighting**: The FCC BDC data (Jun 2025 filing) adjusts I_F weights toward tower density for wireless-dominant tracts and toward road centrality for wired-dominant tracts; weights remain uniform for any tract where BDC coverage data is unavailable
 
 ---
 
@@ -232,19 +235,31 @@ HABRI/
 │   ├── DATA_DICTIONARY.md      # Column-level definitions for all data files
 │   ├── HABRI_EXPLAINED.md      # Plain-language summary of the index
 │   ├── METHODOLOGY.md          # Formulas, statistical methods, design decisions
+│   ├── article_outline.md      # Manuscript outline (Telecommunications Policy)
+│   ├── manuscript_draft.md     # Manuscript draft
 │   └── CONTRIBUTING.md         # Developer setup, architecture, extending HABRI
 ├── notebooks/
 │   ├── 01_data_acquisition     # Downloads and caches all data sources
 │   ├── 02_hazard_processing    # Computes Hazard Exposure (H_E)
-│   ├── 03_infra_proxy_gen      # Computes Infrastructure Fragility (I_F)
+│   ├── 03_infra_proxy_gen      # Computes Infrastructure Fragility (I_F, 3-component)
 │   └── 04_index_calculation    # Computes Coping Capacity (C_C), assembles
 │                               #   HABRI, profiles tracts, validates, maps
 ├── scripts/
-│   ├── build_habri_current_2026_01.py   # Versioned current-conditions HABRI
-│   └── build_ookla_jan_2026_validation.py  # Validation against baseline
+│   ├── fetch_power_grid.py         # HIFLD transmission line density → power_grid_norm
+│   ├── fetch_fcc_bdc.py            # FCC BDC wired availability → p_wired per tract
+│   ├── integrate_power_grid.py     # Add power grid to I_F; adaptive BDC weights; regen baseline
+│   ├── update_ookla_quarterly.py   # Automated S3 quarterly HABRI refresh
+│   ├── validate_road_proxy_mobile.py  # Fixed vs. mobile latency validation of road proxy
+│   ├── plot_time_series.py         # Multi-quarter HABRI trend figures (WNC recovery)
+│   ├── plot_habri_maps.py          # Regenerate all static and interactive HABRI maps
+│   ├── build_habri_current_2026_01.py   # Versioned current-conditions HABRI (Jan 2026)
+│   ├── build_ookla_jan_2026_validation.py  # Validation against baseline
+│   └── build_site.py               # GitHub Pages static site builder
 ├── src/
 │   ├── config.py               # All project settings and constants
-│   └── utils.py                # Shared helper functions
+│   ├── utils.py                # Shared helper functions (normalization, imputation, etc.)
+│   └── region.py               # RegionConfig dataclass for multi-state parameterization
+├── app.py                      # Streamlit dashboard
 ├── requirements.txt            # Python package dependencies
 ├── research_spec.md            # Original research specification
 └── README.md                   # This file

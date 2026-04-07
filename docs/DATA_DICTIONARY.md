@@ -42,10 +42,12 @@ This is the primary deliverable — the final HABRI scores with all sub-indices,
 | `ifld_norm` | float | [0, 1] | Normalized inland flooding risk score (z-score + CDF within study area) |
 | `hrcn_norm` | float | [0, 1] | Normalized hurricane risk score (z-score + CDF within study area) |
 | `lnds_norm` | float | [0, 1] | Normalized landslide risk score (z-score + CDF within study area) |
-| `I_F` | float | [0, 1] | **Infrastructure Fragility** sub-index. Weighted combination of tower density, latency, and road centrality. Higher = more fragile. |
+| `I_F` | float | [0, 1] | **Infrastructure Fragility** sub-index. Weighted combination of tower density, latency, road centrality, and power grid exposure. Higher = more fragile. Formula: `0.25·tower + 0.25·latency + 0.30·road + 0.20·power_grid` (uniform weights; adaptive weights applied per-tract when FCC BDC data is present). |
 | `tower_density_norm` | float | [0, 1] | Z-score + CDF normalized cell tower density, **inverted** (higher = fewer towers = more fragile) |
 | `latency_norm` | float | [0, 1] | Z-score + CDF normalized pre-Helene broadband latency (higher = worse baseline performance) |
 | `road_fragility` | float | [0, 1] | Composite road network fragility (betweenness centrality + inverse road density) |
+| `power_grid_norm` | float | [0, 1] | Z-score + CDF normalized electric transmission line density, **inverted** (higher = sparser grid = more fragile) |
+| `p_wired` | float | [0, 1] | Fraction of fixed broadband-covered locations served by a wired technology (DSL/Cable/Fiber) per FCC BDC Jun 2025 filing. Used to compute adaptive I_F weights. NaN for tracts outside BDC coverage. |
 | `C_C` | float | [0, 1] | **Coping Capacity Deficit** sub-index. Weighted combination of five demographic vulnerability indicators. Higher = less capacity to cope. |
 | `no_vehicle_vuln` | float | [0, 1] | Normalized % of workers with no vehicle available |
 | `mobile_only_vuln` | float | [0, 1] | Normalized % of households with cellular-only internet |
@@ -150,7 +152,12 @@ Intermediate output containing the Infrastructure Fragility sub-index and its co
 | `max_betweenness` | float | [0, 1] | Maximum edge betweenness centrality of any road segment in the tract (higher = more critical single-point-of-failure road) |
 | `edge_count` | int | >= 0 | Number of road network edges assigned to the tract (via midpoint-in-polygon) |
 | `road_fragility` | float | [0, 1] | Composite: `0.60*norm(max_betweenness) + 0.40*norm_inv(road_density)` |
-| `I_F` | float | [0, 1] | Infrastructure Fragility composite: `0.30*tower + 0.30*latency + 0.40*road` |
+| `transmission_line_km` | float | >= 0 | Total length of HIFLD electric transmission lines clipped to the tract (km) |
+| `transmission_density` | float | >= 0 | Transmission line density in km per km² |
+| `max_voltage_kv` | float | >= 0 | Maximum voltage class (kV) of transmission lines in the tract |
+| `power_grid_norm` | float | [0, 1] | Z-score + CDF normalized transmission line density, **inverted** (1.0 = no transmission lines nearby = most grid-fragile) |
+| `p_wired` | float | [0, 1] | Fraction of fixed broadband-covered locations with wired technology (DSL/Cable/Fiber) from FCC BDC Jun 2025 filing. NaN for uncovered tracts; those receive uniform I_F weights. |
+| `I_F` | float | [0, 1] | Infrastructure Fragility composite (4-component): `0.25*tower + 0.25*latency + 0.30*road + 0.20*power_grid` with adaptive tower/road weights per tract when p_wired is available |
 | `geometry` | geometry | — | Census tract polygon boundary |
 
 ---
@@ -383,22 +390,66 @@ Time-series outage data for Western NC internet service providers during the Hur
 
 ---
 
+### hifld_transmission_lines_nc.geojson
+
+**Location:** `data/raw/hifld_transmission_lines_nc.geojson`
+**Produced by:** `scripts/fetch_power_grid.py`
+**Records:** 8,263 in-service NC transmission line segments
+**CRS:** EPSG:4326 (WGS84) on disk; reprojected to EPSG:2264 during processing
+**Source:** HIFLD Open Data, Electric Power Transmission Lines, via ArcGIS REST FeatureServer
+
+High-voltage electric transmission line segments within the study area bounding box. Fetched using paginated queries to the ArcGIS REST API with a bounding box spatial filter (the dataset has no state column, so filtering is done geometrically). HABRI uses line geometry to compute clipped length per census tract.
+
+Key fields: line geometry (LineString), `VOLTAGE` (kV), `STATUS` (in-service filter applied during download), `OWNER`.
+
+---
+
+### fcc_bdc_wired_fraction.csv
+
+**Location:** `data/processed/fcc_bdc_wired_fraction.csv`
+**Produced by:** `scripts/fetch_fcc_bdc.py`
+**Records:** 2,655 NC census tracts with BDC coverage
+**Source:** FCC Broadband Data Collection, June 30 2025 filing (programmatic download via FCC NBM API)
+
+Tract-level wired broadband composition derived from FCC BDC block-level availability data. Used to compute adaptive I_F weights in `scripts/integrate_power_grid.py`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `GEOID` | string (11 chars) | Census tract FIPS identifier |
+| `p_wired` | float [0, 1] | Fraction of fixed broadband-covered locations served by at least one wired provider (DSL tech=10, Cable tech=40, or Fiber tech=50) |
+| `n_blocks_total` | int | Number of census blocks in the tract with any fixed broadband coverage |
+| `n_blocks_wired` | int | Number of blocks with at least one wired provider |
+| `n_locations_total` | int | Total residential/business locations covered by any fixed broadband technology |
+| `n_locations_wired` | int | Locations covered by at least one wired technology |
+| `bdc_filing_note` | string | Filing date and UUID, e.g. `BDC Jun 30, 2025 (42de708f-...)` |
+
+**Technology codes included as "wired":** 10 (DSL), 40 (Cable/HFC), 50 (Fiber).
+**Technology codes in denominator:** all fixed broadband types (wired + satellite tech=60/61 + fixed wireless tech=70/71/72).
+**Tracts not in BDC:** 5 tracts have no BDC coverage; they receive NaN p_wired and uniform I_F weights.
+
+---
+
 ## Visualization Outputs
 
-All stored in `data/processed/`. These are generated by Notebook 04 and are not machine-readable data.
+All stored in `data/processed/`. Generated by `scripts/plot_habri_maps.py`, `scripts/plot_time_series.py`, and Notebook 04. Not machine-readable data.
 
-| File | Format | Description |
-|------|--------|-------------|
-| `habri_4panel.png` | PNG (300 DPI) | Four-panel map: H_E, I_F, C_C, and HABRI composite with Natural Breaks classification |
-| `habri_4panel.pdf` | PDF | Vector version of the four-panel map for print/publication |
-| `habri_4panel_preview.jpg` | JPEG | Low-resolution preview of the four-panel map |
-| `habri_profiles.png` | PNG (300 DPI) | Map of k-means vulnerability profiles (Power-Dependent, Transport-Fragile, Dual-Risk) |
-| `habri_profiles.pdf` | PDF | Vector version of the profiles map for print/publication |
-| `habri_profiles_preview.jpg` | JPEG | Low-resolution preview of the profiles map |
-| `habri_validation_2026_01.png` | PNG (200 DPI) | January 2026 current-conditions validation scatter plots and summary statistics |
-| `ioda_outage_timeseries.png` | PNG (200 DPI) | 3x2 panel: BGP and ping time-series for 3 WNC ISPs during Helene |
-| `fcc_county_validation.png` | PNG (200 DPI) | HABRI vs FCC cell site outage % by county, plus sub-index bar chart |
-| `habri_map.html` | HTML | Interactive Folium map with HABRI choropleth, risk profiles, and tower overlays |
+| File | Format | Generated By | Description |
+|------|--------|-------------|------------|
+| `habri_statewide_4panel.png` | PNG (300 DPI) | `plot_habri_maps.py` | Statewide four-panel choropleth: H_E, I_F, C_C, and HABRI composite for all 2,660 NC tracts |
+| `habri_statewide_4panel.pdf` | PDF | `plot_habri_maps.py` | Vector version of the statewide four-panel map |
+| `habri_4panel.png` | PNG (800 DPI) | `plot_habri_maps.py` | Zoomed four-panel map for Land of the Sky counties (Buncombe, Henderson, Madison, Transylvania) |
+| `habri_4panel.pdf` | PDF | `plot_habri_maps.py` | Vector version of the Land of the Sky four-panel map |
+| `habri_profiles.png` | PNG (800 DPI) | `plot_habri_maps.py` | K-means vulnerability profile map for Land of the Sky counties |
+| `habri_profiles.pdf` | PDF | `plot_habri_maps.py` | Vector version of the profiles map |
+| `habri_map.html` | HTML | `plot_habri_maps.py` | Interactive Folium map with HABRI choropleth, risk profiles, and tower overlays (~21 MB) |
+| `habri_timeseries_statewide.png` | PNG (300 DPI) | `plot_time_series.py` | Line chart of statewide mean HABRI and sub-index scores across Q3 2024 – Q4 2025 |
+| `habri_timeseries_wnc.png` | PNG (300 DPI) | `plot_time_series.py` | WNC county HABRI trends vs. NC statewide mean; Helene impact band |
+| `habri_timeseries_profiles.png` | PNG (300 DPI) | `plot_time_series.py` | Stacked bar chart of risk profile fraction per quarter |
+| `habri_recovery_scatter.png` | PNG (300 DPI) | `plot_time_series.py` | Scatter of Q3 2024 baseline vs. Q4 2025 HABRI for WNC tracts, colored by profile |
+| `road_proxy_validation.png` | PNG (200 DPI) | `validate_road_proxy_mobile.py` | Scatter of road_fragility vs. fixed and mobile latency delta (Q3→Q4 2024) |
+| `habri_validation_2026_01.png` | PNG (200 DPI) | `build_ookla_jan_2026_validation.py` | January 2026 current-conditions validation scatter plots |
+| `ioda_outage_timeseries.png` | PNG (200 DPI) | Notebook 04 | 3×2 panel: BGP and ping time-series for 3 WNC ISPs during Helene |
+| `fcc_county_validation.png` | PNG (200 DPI) | Notebook 04 | HABRI vs FCC cell site outage % by county, plus sub-index bar chart |
 
 ### Validation tables (versioned current-conditions)
 

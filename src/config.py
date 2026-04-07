@@ -253,10 +253,40 @@ W_HE_FLOOD = 0.40
 W_HE_HURRICANE = 0.35
 W_HE_LANDSLIDE = 0.25
 
-# Infrastructure Fragility sub-component weights
-W_IF_TOWER_DENSITY = 0.30
-W_IF_LATENCY = 0.30
-W_IF_ROAD_CENTRALITY = 0.40
+# Infrastructure Fragility sub-component weights (4-component model, v2 — Apr 2026)
+# Incorporates HIFLD transmission line density as a power-grid fragility proxy.
+# Previous 3-component weights: tower=0.30, latency=0.30, road=0.40
+W_IF_TOWER_DENSITY = 0.25
+W_IF_LATENCY = 0.25
+W_IF_ROAD_CENTRALITY = 0.30
+W_IF_POWER_GRID = 0.20  # inverted transmission-line density; 0 = no lines = high fragility
+
+# Adaptive I_F weighting endpoints (v3 — Apr 2026)
+# When FCC BDC p_wired is available, road and tower weights are interpolated
+# between two endpoint schemes based on each tract's wired broadband availability.
+#
+# Rationale: road_fragility is empirically validated as a wired-infrastructure proxy
+# (fixed ρ = −0.287 vs mobile ρ = +0.078, WNC post-Helene; §6.4 of manuscript).
+# Tracts where wired infrastructure dominates should weight road fragility higher;
+# tracts served primarily by wireless should weight tower density higher instead.
+#
+# Interpolation (latency and power_grid weights held constant):
+#   w_road  = W_IF_ROAD_WIRED  * p_wired + W_IF_ROAD_WIRELESS  * (1 - p_wired)
+#   w_tower = W_IF_TOWER_WIRED * p_wired + W_IF_TOWER_WIRELESS * (1 - p_wired)
+# At p_wired = 0.60 (approximate NC mean), weights equal the uniform defaults above.
+#
+# All four weights at each endpoint sum to 1.0.
+# Endpoint: p_wired = 1.0 (fully wired tract)
+W_IF_ROAD_WIRED   = 0.40   # road gets max weight
+W_IF_TOWER_WIRED  = 0.15   # tower gets min weight
+# Endpoint: p_wired = 0.0 (fully wireless tract)
+W_IF_ROAD_WIRELESS  = 0.15  # road gets min weight
+W_IF_TOWER_WIRELESS = 0.40  # tower gets max weight
+# Latency and power_grid weights are constant across the interpolation
+W_IF_LATENCY_ADAPTIVE   = 0.25  # same as W_IF_LATENCY
+W_IF_POWER_GRID_ADAPTIVE = 0.20  # same as W_IF_POWER_GRID
+# Crossover p_wired at which adaptive weights equal the uniform defaults
+W_IF_ADAPTIVE_CROSSOVER = 0.60  # 60% wired availability → same as uniform weights
 
 # Road fragility internal weights
 W_ROAD_BETWEENNESS = 0.60

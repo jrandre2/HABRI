@@ -84,10 +84,14 @@ NRI v1.20 (December 2025) renamed "Riverine Flooding" to "Inland Flooding". Colu
 ### Formula
 
 ```
-I_F = 0.30 * tower_density_norm + 0.30 * latency_norm + 0.40 * road_fragility
+I_F = 0.25 * tower_density_norm + 0.25 * latency_norm + 0.30 * road_fragility + 0.20 * power_grid_norm
 ```
 
-### 3.1 Tower Density (weight: 0.30)
+The I_F formula was extended from three components (0.30/0.30/0.40) to four components in April 2026 following integration of HIFLD electric transmission line data and FCC BDC broadband availability data.
+
+**Adaptive weighting (when FCC BDC data is available):** Tower and road weights shift linearly with each tract's wired broadband composition (`p_wired` = fraction of fixed broadband locations served by wired technologies). At p_wired = 1.0 (fully wired): tower = 0.15, road = 0.40. At p_wired = 0.0 (fully wireless): tower = 0.40, road = 0.15. Latency and power weights are constant at 0.25 and 0.20 respectively. Uniform weights (0.25/0.25/0.30/0.20) are used when BDC data is unavailable.
+
+### 3.1 Tower Density (weight: 0.25)
 
 **Source:** HIFLD Cellular Towers, ArcGIS REST FeatureServer.
 
@@ -103,7 +107,7 @@ Inversion means that tracts with **more** towers get **lower** fragility scores 
 
 **Missing data:** Tracts with zero towers receive NaN density, then imputed with the study area median via `impute_with_median()`.
 
-### 3.2 Broadband Latency (weight: 0.30)
+### 3.2 Broadband Latency (weight: 0.25)
 
 **Source:** Ookla Speedtest Open Data, fixed broadband tiles.  
 For the baseline layer, Q3 2024 (pre-Helene) tiles are used.
@@ -125,7 +129,7 @@ For the baseline layer, Q3 2024 (pre-Helene) tiles are used.
 
 **Why latency instead of throughput:** Latency is more sensitive to backhaul congestion and infrastructure degradation than download speed, which can be artificially high on last-mile connections even when backbone connectivity is stressed.
 
-### 3.3 Road Network Fragility (weight: 0.40)
+### 3.3 Road Network Fragility (weight: 0.30)
 
 **Source:** OpenStreetMap via OSMnx, network type = `drive`.
 
@@ -160,6 +164,36 @@ road_density = edge_count / (total_road_length_m / 1000)
 ```
 
 This measures route redundancy: more edges per km of road means more alternative paths. Z-score normalized with inversion (low density = high fragility).
+
+#### 3.3.3 Empirical validation of road proxy
+
+The road-centrality proxy assumes that fiber and cable routes co-locate with road corridors. This assumption is empirically tested by comparing road_fragility against fixed broadband latency degradation (Ookla Q3→Q4 2024) versus mobile/cellular latency degradation over the same period. If road network disruption explains fixed-broadband degradation better than cellular degradation, the proxy is supported.
+
+**Results (Western NC, n = 397 tracts with both fixed and mobile Ookla coverage):**
+
+- Fixed latency Δ vs. road_fragility: Spearman ρ = −0.287, p < 0.001
+- Mobile latency Δ vs. road_fragility: Spearman ρ = +0.078, p = 0.38 (n.s.)
+- Ratio: 3.69× stronger signal for fixed than mobile
+
+The sign reversal for mobile (ρ ≈ 0, non-significant) rules out geographic confounding as the primary explanation. The result supports road right-of-way as a proxy for wired fiber topology in mountainous WNC terrain. It does not validate the proxy for flat or urban terrain where underground conduit separates from roads.
+
+### 3.4 Power Grid Fragility (weight: 0.20)
+
+**Source:** HIFLD Electric Transmission Lines, ArcGIS REST FeatureServer.
+
+**Rationale:** Cellular base stations and fiber repeaters require grid power. Tracts with sparse high-voltage transmission infrastructure depend on longer distribution runs that are more vulnerable to storm damage (downed trees, flooded substations) and cascading outages. Losing grid power directly causes communications failure independent of the physical state of the broadband network.
+
+**Method:**
+
+1. Query HIFLD electric transmission line segments within the study area bounding box via paginated ArcGIS REST API calls (8,263 in-service NC segments)
+2. Reproject lines to EPSG:2264
+3. Clip each segment to its intersecting tracts; compute clipped length per tract in kilometers
+4. Compute density: `transmission_density_km_km2 = line_km / area_km2`
+5. Z-score normalize with **inversion**: `power_grid_norm = z_score_normalize(density, invert=True)`
+
+Inversion means that tracts with more transmission infrastructure per km² get **lower** power fragility scores.
+
+**Missing data:** Tracts with no transmission lines receive NaN density, then imputed with the study area median via `impute_with_median()`.
 
 ---
 
@@ -342,7 +376,31 @@ This validation is **qualitative/narrative** — it demonstrates that real outag
 
 **Statistical power:** With n=100 counties (21 with observed outages, 79 at 0%), this provides a meaningful correlation test — substantially more statistical power than the original 6-county analysis. DIRS counties with high outages should cluster among counties with high HABRI scores.
 
-### 8.4 Current-conditions layer (January 2026)
+### 8.4 Road proxy component validation
+
+**Hypothesis:** If road betweenness centrality proxies wired fiber topology via road right-of-way co-location, then road_fragility should predict *fixed* broadband degradation during Helene but not *mobile/cellular* degradation (which is independent of road corridors).
+
+**Method:**
+
+1. Download Ookla mobile Q3 and Q4 2024 tiles from AWS S3 (`type=mobile`)
+2. Aggregate mobile tiles to census tracts using the same test-count-weighted latency method as fixed tiles
+3. Compute per-tract latency delta (Q4 − Q3) for both fixed and mobile
+4. Restrict to WNC tracts with coverage in both tile sets (n = 397)
+5. Compute Spearman rank correlation between road_fragility and each latency delta
+6. Compute the fixed/mobile ratio as a discriminant statistic
+
+**Results:**
+
+| Comparison | Spearman ρ | p-value | n |
+| ----------- | ----------- | ------- | --- |
+| road_fragility vs. fixed latency Δ | −0.287 | < 0.001 | 397 |
+| road_fragility vs. mobile latency Δ | +0.078 | 0.38 | 397 |
+
+Fixed/mobile ratio: 3.69×. The sign reversal for mobile rules out geographic confounding (e.g., remoteness) as the primary driver.
+
+**Conclusion:** The road centrality proxy is supported for wired fiber in mountainous terrain. The validation does not extend to flat or urban terrain where buried conduit may diverge from road corridors.
+
+### 8.5 Current-conditions layer (January 2026)
 
 The HABRI baseline is frozen at Q3 2024 and is not overwritten.  
 January 2026 is processed as a separate, versioned scenario (default tag `2026_01`) to support refresh and comparison.

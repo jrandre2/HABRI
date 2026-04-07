@@ -371,3 +371,60 @@ def fetch_acs_state_tracts(
         df.loc[df[var] == -666666666, var] = np.nan
 
     return df
+
+
+def compute_adaptive_if_weights(
+    p_wired: "pd.Series",
+) -> "pd.DataFrame":
+    """Compute per-tract adaptive I_F weights from FCC BDC wired availability fraction.
+
+    Interpolates road and tower weights linearly between two endpoint schemes
+    based on each tract's p_wired (fraction of residential locations with any
+    wired broadband provider available, from FCC BDC availability data).
+
+    At p_wired = W_IF_ADAPTIVE_CROSSOVER (≈0.60, the NC mean), weights equal
+    the uniform defaults (W_IF_TOWER_DENSITY=0.25, W_IF_ROAD_CENTRALITY=0.30).
+    Latency and power_grid weights are held constant.
+
+    Parameters
+    ----------
+    p_wired : pd.Series
+        Per-tract wired availability fraction [0, 1]. NaN → uniform defaults.
+
+    Returns
+    -------
+    DataFrame with columns: w_tower, w_latency, w_road, w_power (sum = 1.0 per row).
+    """
+    import pandas as pd
+    from src.config import (
+        W_IF_LATENCY_ADAPTIVE,
+        W_IF_POWER_GRID_ADAPTIVE,
+        W_IF_ROAD_CENTRALITY,
+        W_IF_ROAD_WIRELESS,
+        W_IF_ROAD_WIRED,
+        W_IF_TOWER_DENSITY,
+        W_IF_TOWER_WIRELESS,
+        W_IF_TOWER_WIRED,
+    )
+
+    p = p_wired.clip(0, 1)  # ensure [0, 1]
+
+    w_road  = W_IF_ROAD_WIRED   * p + W_IF_ROAD_WIRELESS   * (1 - p)
+    w_tower = W_IF_TOWER_WIRED  * p + W_IF_TOWER_WIRELESS  * (1 - p)
+
+    result = pd.DataFrame({
+        "w_tower":   w_tower,
+        "w_latency": W_IF_LATENCY_ADAPTIVE,
+        "w_road":    w_road,
+        "w_power":   W_IF_POWER_GRID_ADAPTIVE,
+    })
+
+    # Fill missing p_wired with uniform defaults
+    missing = p_wired.isna()
+    if missing.any():
+        result.loc[missing, "w_tower"]   = W_IF_TOWER_DENSITY
+        result.loc[missing, "w_road"]    = W_IF_ROAD_CENTRALITY
+        result.loc[missing, "w_latency"] = W_IF_LATENCY_ADAPTIVE
+        result.loc[missing, "w_power"]   = W_IF_POWER_GRID_ADAPTIVE
+
+    return result

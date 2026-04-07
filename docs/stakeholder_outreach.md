@@ -16,7 +16,8 @@ I am writing to share a research tool that may be directly useful to NCEM's prep
 HABRI was developed at [Texas Tech University] and validated against Hurricane Helene outage data from three independent sources — Ookla fixed-network performance measurements, FCC Disaster Information Reporting System reports, and Internet Outage Detection and Analysis (IODA) telemetry. The validation found that HABRI correctly identified the counties and providers that experienced the most severe connectivity failures during Helene, including the 80-hour complete network blackout suffered by Morris Broadband in Henderson County.
 
 **What HABRI provides:**
-- Risk scores for all 2,660 NC census tracts, combining FEMA NRI hazard exposure, cellular tower density, broadband latency, road network centrality, and ACS socioeconomic vulnerability
+
+- Risk scores for all 2,660 NC census tracts, combining FEMA NRI hazard exposure, cellular tower density, broadband latency, road network centrality, electric transmission grid exposure, and ACS socioeconomic vulnerability
 - Three vulnerability profiles (*Power-Dependent*, *Dual-Risk*, *Transport-Fragile*) with distinct recommended interventions
 - An interactive web map and downloadable data for integration into existing planning tools
 - A quarterly update mechanism tied to Ookla's public speed-test data
@@ -84,7 +85,7 @@ This suggests that HABRI could serve as a targeting tool for proactive resilienc
 
 **Key findings for Western NC:**
 - 226 NC census tracts classified as *Transport-Fragile* — communities where a single mountain corridor carries both the road network and the fiber infrastructure serving the community
-- Morris Broadband (Henderson County, ASN 53488) experienced an 80-hour complete network blackout during Helene; the county's HABRI score placed it in the 92nd percentile pre-storm
+- Morris Broadband (Henderson County, ASN 53488) experienced an 80-hour complete network blackout during Helene; the specific tract served by Morris (37089932000) has a HABRI score in the 92nd percentile statewide
 - The correlation between pre-storm HABRI scores and Helene cell outage rates (FCC DIRS data) is statistically significant: Spearman ρ = 0.236, p = 0.018
 
 **Suggested NCORR applications:**

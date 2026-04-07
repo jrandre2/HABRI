@@ -41,6 +41,7 @@ from src.config import (
     W_HE_HURRICANE,
     W_HE_LANDSLIDE,
     W_IF_LATENCY,
+    W_IF_POWER_GRID,
     W_IF_ROAD_CENTRALITY,
     W_IF_TOWER_DENSITY,
     W_INFRA_FRAGILITY,
@@ -86,11 +87,14 @@ class RegionConfig:
         Mapping of NRI column name → human-readable label for each hazard.
         Override to substitute different NRI hazard types (e.g., wildfire, earthquake).
     w_if_tower_density : float
-        Weight for cellular tower density within I_F (default 0.30).
+        Weight for cellular tower density within I_F (default 0.25).
     w_if_latency : float
-        Weight for broadband latency within I_F (default 0.30).
+        Weight for broadband latency within I_F (default 0.25).
     w_if_road_centrality : float
-        Weight for road network centrality within I_F (default 0.40).
+        Weight for road network centrality within I_F (default 0.30).
+    w_if_power_grid : float
+        Weight for electric transmission grid fragility within I_F (default 0.20).
+        Set to 0.0 to use the 3-component I_F formula (backward compatible).
     w_road_betweenness : float
         Internal weight for betweenness centrality within the road component (default 0.60).
     w_road_density : float
@@ -133,6 +137,7 @@ class RegionConfig:
     w_if_tower_density: float = W_IF_TOWER_DENSITY
     w_if_latency: float = W_IF_LATENCY
     w_if_road_centrality: float = W_IF_ROAD_CENTRALITY
+    w_if_power_grid: float = W_IF_POWER_GRID
 
     # Road network internal weights
     w_road_betweenness: float = W_ROAD_BETWEENNESS
@@ -190,10 +195,13 @@ class RegionConfig:
                 f"nri_score_cols has {len(self.nri_score_cols)}. They must match."
             )
 
-        if_total = self.w_if_tower_density + self.w_if_latency + self.w_if_road_centrality
+        if_total = (self.w_if_tower_density + self.w_if_latency
+                    + self.w_if_road_centrality + self.w_if_power_grid)
         if abs(if_total - 1.0) > 1e-6:
             raise ValueError(
-                f"Infrastructure Fragility weights must sum to 1.0 (got {if_total:.4f})."
+                f"Infrastructure Fragility weights must sum to 1.0 (got {if_total:.4f}). "
+                f"tower={self.w_if_tower_density}, latency={self.w_if_latency}, "
+                f"road={self.w_if_road_centrality}, power={self.w_if_power_grid}"
             )
 
         road_total = self.w_road_betweenness + self.w_road_density
@@ -212,7 +220,8 @@ class RegionConfig:
             f"  Hazard components: "
             + ", ".join(f"{k}={v:.0%}" for k, v in self.hazard_weights.items()),
             f"  I_F components: tower={self.w_if_tower_density:.0%}  "
-            f"latency={self.w_if_latency:.0%}  road={self.w_if_road_centrality:.0%}",
+            f"latency={self.w_if_latency:.0%}  road={self.w_if_road_centrality:.0%}  "
+            f"power={self.w_if_power_grid:.0%}",
             f"  ACS year: {self.acs_year}",
         ]
         return "\n".join(lines)
@@ -227,6 +236,65 @@ NC_CONFIG = RegionConfig(
     crs_project=CRS_PROJECT,
     sqft_per_sqkm=SQFT_PER_SQKM,
     focal_county_fips=WNC_COUNTY_FIPS,
+)
+
+# ── Tennessee ─────────────────────────────────────────────────────────────────
+# CRS: EPSG:2274 (NAD83 / Tennessee, US survey feet) — same unit as NC.
+# Hazard weights unchanged: inland flooding and landslides drove Helene damage
+# in the Appalachian mountain counties; hurricane wind adds secondary risk.
+# Focal counties: Eastern TN Appalachian counties most affected by Helene
+# (Unicoi, Carter, Johnson, Sullivan, Washington, Greene, Cocke, Hamblen).
+
+_TN_COUNTY_FIPS: dict[str, str] = {
+    "Anderson": "001", "Bedford": "003", "Benton": "005", "Bledsoe": "007",
+    "Blount": "009", "Bradley": "011", "Campbell": "013", "Cannon": "015",
+    "Carroll": "017", "Carter": "019", "Cheatham": "021", "Chester": "023",
+    "Claiborne": "025", "Clay": "027", "Cocke": "029", "Coffee": "031",
+    "Crockett": "033", "Cumberland": "035", "Davidson": "037", "Decatur": "039",
+    "DeKalb": "041", "Dickson": "043", "Dyer": "045", "Fayette": "047",
+    "Fentress": "049", "Franklin": "051", "Gibson": "053", "Giles": "055",
+    "Grainger": "057", "Greene": "059", "Grundy": "061", "Hamblen": "063",
+    "Hamilton": "065", "Hancock": "067", "Hardeman": "069", "Hardin": "071",
+    "Hawkins": "073", "Haywood": "075", "Henderson": "077", "Henry": "079",
+    "Hickman": "081", "Houston": "083", "Humphreys": "085", "Jackson": "087",
+    "Jefferson": "089", "Johnson": "091", "Knox": "093", "Lake": "095",
+    "Lauderdale": "097", "Lawrence": "099", "Lewis": "101", "Lincoln": "103",
+    "Loudon": "105", "McMinn": "107", "McNairy": "109", "Macon": "111",
+    "Madison": "113", "Marion": "115", "Marshall": "117", "Maury": "119",
+    "Meigs": "121", "Monroe": "123", "Montgomery": "125", "Moore": "127",
+    "Morgan": "129", "Obion": "131", "Overton": "133", "Perry": "135",
+    "Pickett": "137", "Polk": "139", "Putnam": "141", "Rhea": "143",
+    "Roane": "145", "Robertson": "147", "Rutherford": "149", "Scott": "151",
+    "Sequatchie": "153", "Sevier": "155", "Shelby": "157", "Smith": "159",
+    "Stewart": "161", "Sullivan": "163", "Sumner": "165", "Tipton": "167",
+    "Trousdale": "169", "Unicoi": "171", "Union": "173", "Van Buren": "175",
+    "Warren": "177", "Washington": "179", "Wayne": "181", "Weakley": "183",
+    "White": "185", "Williamson": "187", "Wilson": "189",
+}
+
+# Eastern TN counties most severely affected by Hurricane Helene (Sep 2024):
+# Unicoi (Erwin/Nolichucky River flooding), Carter (Elizabethton),
+# Johnson (Mountain City), Sullivan (Bristol/Kingsport),
+# Washington (Johnson City), Greene (Greeneville),
+# Cocke (Newport/Pigeon River), Hamblen (Morristown).
+ETN_HELENE_COUNTY_FIPS: dict[str, str] = {
+    "Unicoi":     "47171",
+    "Carter":     "47019",
+    "Johnson":    "47091",
+    "Sullivan":   "47163",
+    "Washington": "47179",
+    "Greene":     "47059",
+    "Cocke":      "47029",
+    "Hamblen":    "47063",
+}
+
+TN_CONFIG = RegionConfig(
+    state_name="Tennessee",
+    state_fips="47",
+    county_fips=_TN_COUNTY_FIPS,
+    crs_project="EPSG:2274",   # NAD83 / Tennessee (US survey feet)
+    sqft_per_sqkm=SQFT_PER_SQKM,
+    focal_county_fips=ETN_HELENE_COUNTY_FIPS,
 )
 
 # Template for a Pacific Northwest state (wildfire + earthquake hazards)

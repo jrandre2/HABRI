@@ -48,12 +48,19 @@ from src.config import (
     W_COPING_CAPACITY,
     W_HAZARD_EXPOSURE,
     W_IF_LATENCY,
+    W_IF_POWER_GRID,
     W_IF_ROAD_CENTRALITY,
     W_IF_TOWER_DENSITY,
     W_INFRA_FRAGILITY,
     ookla_s3_path,
 )
-from src.utils import ensure_crs, impute_with_median, load_study_tracts, z_score_normalize
+from src.utils import (
+    compute_adaptive_if_weights,
+    ensure_crs,
+    impute_with_median,
+    load_study_tracts,
+    z_score_normalize,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -222,15 +229,26 @@ def aggregate_to_tracts(
 # ── HABRI recompute ───────────────────────────────────────────────────────────
 
 def recompute_habri(tag: str, tract_stats: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Merge new latency into baseline I_F and recompute HABRI."""
+    """Merge new latency into baseline I_F and recompute HABRI.
+
+    Uses adaptive per-tract I_F weights if fcc_bdc_wired_fraction.csv is present,
+    otherwise falls back to uniform weights from src/config.py.
+    """
     lat_norm_col = f"latency_norm_{tag}"
     lat_norm_imputed_col = f"{lat_norm_col}_imputed"
 
-    # Load baseline infrastructure (tower density + road fragility stay fixed)
+    # Load baseline infrastructure (tower density, road fragility, power grid stay fixed)
     infra_baseline = gpd.read_file(DATA_PROCESSED / "infra_fragility.gpkg")
     infra_baseline["GEOID"] = infra_baseline["GEOID"].astype(str).str.zfill(11)
 
-    infra = infra_baseline[["GEOID", "tower_density_norm", "road_fragility", "geometry"]].merge(
+    # Carry p_wired and per-tract weights if already computed in infra_fragility.gpkg
+    fixed_cols = ["GEOID", "tower_density_norm", "road_fragility", "geometry"]
+    if "power_grid_norm" in infra_baseline.columns:
+        fixed_cols.append("power_grid_norm")
+    if "p_wired" in infra_baseline.columns:
+        fixed_cols.append("p_wired")
+
+    infra = infra_baseline[fixed_cols].merge(
         tract_stats[["GEOID", lat_norm_col, lat_norm_imputed_col,
                       f"avg_latency_ms_{tag}", f"total_tests_{tag}"]],
         on="GEOID",
@@ -238,11 +256,33 @@ def recompute_habri(tag: str, tract_stats: gpd.GeoDataFrame) -> gpd.GeoDataFrame
     )
     infra["latency_norm"] = infra[lat_norm_col].fillna(infra[lat_norm_imputed_col])
     infra, _ = impute_with_median(infra, "latency_norm", f"Latency (normalized) [{tag}]")
-    infra["I_F"] = (
-        W_IF_TOWER_DENSITY * infra["tower_density_norm"]
-        + W_IF_LATENCY * infra["latency_norm"]
-        + W_IF_ROAD_CENTRALITY * infra["road_fragility"]
-    )
+
+    # Determine whether to use adaptive or uniform weights
+    use_adaptive = "p_wired" in infra.columns and infra["p_wired"].notna().any()
+
+    if "power_grid_norm" in infra.columns:
+        if use_adaptive:
+            weights = compute_adaptive_if_weights(infra["p_wired"])
+            infra["I_F"] = (
+                weights["w_tower"].values  * infra["tower_density_norm"]
+                + W_IF_LATENCY             * infra["latency_norm"]
+                + weights["w_road"].values * infra["road_fragility"]
+                + W_IF_POWER_GRID          * infra["power_grid_norm"]
+            )
+        else:
+            infra["I_F"] = (
+                W_IF_TOWER_DENSITY    * infra["tower_density_norm"]
+                + W_IF_LATENCY        * infra["latency_norm"]
+                + W_IF_ROAD_CENTRALITY * infra["road_fragility"]
+                + W_IF_POWER_GRID     * infra["power_grid_norm"]
+            )
+    else:
+        # Fallback: 3-component model (pre-integration baseline)
+        infra["I_F"] = (
+            W_IF_TOWER_DENSITY    * infra["tower_density_norm"]
+            + W_IF_LATENCY        * infra["latency_norm"]
+            + W_IF_ROAD_CENTRALITY * infra["road_fragility"]
+        )
 
     infra_out = DATA_PROCESSED / f"infra_fragility_current_{tag}.gpkg"
     infra.to_file(infra_out, driver="GPKG")
