@@ -36,6 +36,13 @@ data/processed/*.parquet
 
 # Caches
 cache/
+notebooks/cache/
+
+# Temporary build outputs
+tmp/
+
+# Benton deliverables generated outputs
+benton_deliverables/output/
 
 # Claude Code
 .claude/

@@ -90,6 +90,34 @@ def _save(fig, path_stem: Path | None, suffix: str, dpi: int = 300) -> None:
     print(f"  Saved: {pdf}")
 
 
+def _outside_legend_kwds(
+    side: str,
+    *,
+    fontsize: int,
+    title: str | None = None,
+    title_fontsize: int | None = None,
+) -> dict:
+    if side == "left":
+        loc = "upper right"
+        anchor = (-0.04, 1.0)
+    else:
+        loc = "upper left"
+        anchor = (1.04, 1.0)
+
+    kwds = {
+        "loc": loc,
+        "bbox_to_anchor": anchor,
+        "borderaxespad": 0.0,
+        "fontsize": fontsize,
+        "frameon": True,
+    }
+    if title is not None:
+        kwds["title"] = title
+    if title_fontsize is not None:
+        kwds["title_fontsize"] = title_fontsize
+    return kwds
+
+
 # ── Plot 1: statewide 4-panel ─────────────────────────────────────────────────
 
 def plot_statewide_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> None:
@@ -103,7 +131,7 @@ def plot_statewide_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> No
     # WNC county boundary overlay
     wnc_boundary = habri[habri["county_fips"].isin(WNC_FIPS)].dissolve().boundary
 
-    for ax, (col, title) in zip(axes.flat, PANEL_COLS):
+    for idx, (ax, (col, title)) in enumerate(zip(axes.flat, PANEL_COLS)):
         ax.set_xlim(xmin - xpad, xmax + xpad)
         ax.set_ylim(ymin - ypad, ymax + ypad)
         _add_basemap(ax, habri)
@@ -118,13 +146,12 @@ def plot_statewide_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> No
             edgecolor="none",
             linewidth=0,
             alpha=0.88,
-            legend_kwds={
-                "loc": "lower left",
-                "fontsize": 9,
-                "frameon": True,
-                "title": "Score",
-                "title_fontsize": 9,
-            },
+            legend_kwds=_outside_legend_kwds(
+                "left" if idx % 2 == 0 else "right",
+                fontsize=9,
+                title="Score",
+                title_fontsize=9,
+            ),
             missing_kwds={"color": "#cccccc"},
             zorder=3,
         )
@@ -141,8 +168,8 @@ def plot_statewide_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> No
         fontsize=14,
         fontweight="bold",
     )
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02,
-                        wspace=0.06, hspace=0.10)
+    fig.subplots_adjust(left=0.12, right=0.88, top=0.91, bottom=0.02,
+                        wspace=0.26, hspace=0.10)
     _save(fig, save_stem, "", dpi=300)
     plt.close(fig)
 
@@ -166,7 +193,7 @@ def plot_lots_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> None:
 
     fig, axes = plt.subplots(2, 2, figsize=(30, 24))
 
-    for ax, (col, title) in zip(axes.flat, PANEL_COLS):
+    for idx, (ax, (col, title)) in enumerate(zip(axes.flat, PANEL_COLS)):
         ax.set_xlim(xmin - xpad, xmax + xpad)
         ax.set_ylim(ymin - ypad, ymax + ypad)
         _add_basemap(ax, lots_habri)
@@ -181,13 +208,10 @@ def plot_lots_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> None:
             edgecolor="none",
             linewidth=0,
             alpha=0.92,
-            legend_kwds={
-                "loc": "upper left",
-                "bbox_to_anchor": (-0.16, 0.98),
-                "fontsize": 13,
-                "frameon": True,
-                "borderaxespad": 0.0,
-            },
+            legend_kwds=_outside_legend_kwds(
+                "left" if idx % 2 == 0 else "right",
+                fontsize=13,
+            ),
             zorder=3,
         )
 
@@ -213,8 +237,8 @@ def plot_lots_4panel(habri: gpd.GeoDataFrame, save_stem: Path | None) -> None:
         "Hazard-Adjusted Broadband Reliability Index (HABRI) — Land of the Sky Counties",
         fontsize=19, fontweight="bold",
     )
-    fig.subplots_adjust(left=0.09, right=0.99, top=0.92, bottom=0.04,
-                        wspace=0.18, hspace=0.18)
+    fig.subplots_adjust(left=0.12, right=0.88, top=0.92, bottom=0.04,
+                        wspace=0.30, hspace=0.18)
     _save(fig, save_stem, "", dpi=800)
     plt.close(fig)
 

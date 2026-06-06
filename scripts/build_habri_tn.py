@@ -68,8 +68,14 @@ from src.config import (
     W_HAZARD_EXPOSURE, W_INFRA_FRAGILITY, W_COPING_CAPACITY,
     HIFLD_TOWER_URL, HIFLD_TRANSMISSION_URL, HIFLD_MAX_RECORDS,
 )
-from src.region import TN_CONFIG, ETN_HELENE_COUNTY_FIPS
-from src.utils import z_score_normalize, impute_with_median, ensure_crs, query_arcgis_feature_layer
+from src.region import TN_CONFIG, EAST_TN_COUNTY_FIPS, ETN_HELENE_COUNTY_FIPS
+from src.utils import (
+    compute_adaptive_if_weights,
+    ensure_crs,
+    impute_with_median,
+    query_arcgis_feature_layer,
+    z_score_normalize,
+)
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -120,6 +126,17 @@ def step(msg: str) -> None:
 
 def done(path: Path) -> bool:
     return path.exists()
+
+
+def load_bdc_wired_fraction() -> pd.DataFrame | None:
+    """Load Tennessee FCC BDC tract-level wired availability if present."""
+    path = DATA_PROCESSED / "fcc_bdc_wired_fraction_tn.csv"
+    if not path.exists():
+        return None
+
+    bdc = pd.read_csv(path, dtype={"GEOID": str})
+    bdc["GEOID"] = bdc["GEOID"].astype(str).str.zfill(11)
+    return bdc
 
 
 def _ookla_s3_path(year: int, quarter: int) -> str:
@@ -499,12 +516,38 @@ def assemble_habri(tracts: gpd.GeoDataFrame, hazard: gpd.GeoDataFrame,
     infra["latency_norm"] = latency_norm
     infra["road_fragility"] = road_fragility
     infra["power_grid_norm"] = power_norm
-    infra["I_F"] = (
-        W_IF_TOWER_DENSITY   * infra["tower_density_norm"]
-        + W_IF_LATENCY       * infra["latency_norm"]
-        + W_IF_ROAD_CENTRALITY * infra["road_fragility"]
-        + W_IF_POWER_GRID    * infra["power_grid_norm"]
-    )
+    bdc = load_bdc_wired_fraction()
+    if bdc is not None:
+        infra = infra.join(bdc.set_index("GEOID")[["p_wired"]], how="left")
+        weights = compute_adaptive_if_weights(infra["p_wired"])
+        infra["w_tower"] = weights["w_tower"].values
+        infra["w_road"] = weights["w_road"].values
+        infra["I_F"] = (
+            infra["w_tower"] * infra["tower_density_norm"]
+            + W_IF_LATENCY * infra["latency_norm"]
+            + infra["w_road"] * infra["road_fragility"]
+            + W_IF_POWER_GRID * infra["power_grid_norm"]
+        )
+        matched = int(infra["p_wired"].notna().sum())
+        filing_note = bdc["bdc_filing_note"].iloc[0] if "bdc_filing_note" in bdc.columns else "unknown"
+        print(
+            "  FCC BDC p_wired: "
+            f"{matched:,} tracts matched "
+            f"(mean={infra['p_wired'].mean():.3f}, filing: {filing_note})"
+        )
+        print(
+            "  Adaptive weights: "
+            f"road=[{infra['w_road'].min():.3f}, {infra['w_road'].max():.3f}], "
+            f"tower=[{infra['w_tower'].min():.3f}, {infra['w_tower'].max():.3f}]"
+        )
+    else:
+        infra["I_F"] = (
+            W_IF_TOWER_DENSITY * infra["tower_density_norm"]
+            + W_IF_LATENCY * infra["latency_norm"]
+            + W_IF_ROAD_CENTRALITY * infra["road_fragility"]
+            + W_IF_POWER_GRID * infra["power_grid_norm"]
+        )
+        print("  FCC BDC p_wired not found — using uniform I_F weights")
 
     # ── Coping Capacity ───────────────────────────────────────────────────────
     acs_cc = acs.copy()
@@ -577,7 +620,8 @@ def assemble_habri(tracts: gpd.GeoDataFrame, hazard: gpd.GeoDataFrame,
     habri_reset["state_name"] = TN_CONFIG.state_name
     habri_reset["county_fips"] = habri_reset["GEOID"].astype(str).str.zfill(11).str[:5]
     habri_reset["county_name"] = habri_reset["county_fips"].map(county_name_by_fips).fillna("Unknown")
-    habri_reset.to_csv(out_csv, index=False)
+    habri_csv = habri_reset.drop(columns=["geometry"], errors="ignore")
+    habri_csv.to_csv(out_csv, index=False)
     habri_reset.to_file(out_gpkg, driver="GPKG")
     print(f"  HABRI TN: {len(habri_reset)} tracts  "
           f"range [{habri_reset['HABRI'].min():.4f}, {habri_reset['HABRI'].max():.4f}]  "
@@ -599,6 +643,7 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
     import matplotlib.lines as mlines
     import contextily as cx
 
+    EAST_TN_FIPS_5 = set(EAST_TN_COUNTY_FIPS.values())
     ETN_FIPS_5 = set(ETN_HELENE_COUNTY_FIPS.values())
     ETN_COLORS = {
         "Unicoi":     "#d62728",
@@ -620,6 +665,24 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
     if "county_fips" not in habri.columns:
         habri["county_fips"] = habri["GEOID"].str[0:5]
 
+    def outside_legend_kwds(side: str, *, fontsize: int, title: str | None = None) -> dict:
+        if side == "left":
+            loc = "upper right"
+            anchor = (-0.04, 1.0)
+        else:
+            loc = "upper left"
+            anchor = (1.04, 1.0)
+        kwds = {
+            "loc": loc,
+            "bbox_to_anchor": anchor,
+            "borderaxespad": 0.0,
+            "fontsize": fontsize,
+            "frameon": True,
+        }
+        if title is not None:
+            kwds["title"] = title
+        return kwds
+
     # ── 4-panel statewide ─────────────────────────────────────────────────────
     out_4panel = DATA_PROCESSED / "habri_tn_statewide_4panel.png"
     if not done(out_4panel) or force:
@@ -628,12 +691,12 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
         xmin, ymin, xmax, ymax = habri.total_bounds
         xpad = (xmax - xmin) * 0.01
         ypad = (ymax - ymin) * 0.01
-        for ax, (col, title) in zip(axes.flat, [
+        for idx, (ax, (col, title)) in enumerate(zip(axes.flat, [
             ("H_E", "Hazard Exposure (H_E)"),
             ("I_F", "Infrastructure Fragility (I_F)"),
             ("C_C", "Coping Capacity Deficit (C_C)"),
             ("HABRI", "HABRI Composite Score"),
-        ]):
+        ])):
             ax.set_xlim(xmin - xpad, xmax + xpad)
             ax.set_ylim(ymin - ypad, ymax + ypad)
             try:
@@ -643,27 +706,33 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
                 pass
             habri.plot(column=col, ax=ax, legend=True, cmap="cividis_r",
                        scheme="NaturalBreaks", k=5, edgecolor="none", alpha=0.88,
-                       legend_kwds={"loc": "lower left", "fontsize": 9, "frameon": True},
+                       legend_kwds=outside_legend_kwds(
+                           "left" if idx % 2 == 0 else "right",
+                           fontsize=9,
+                           title="Score",
+                       ),
                        missing_kwds={"color": "#cccccc"}, zorder=3)
             etn_boundary.plot(ax=ax, color="#CC6677", linewidth=1.8, zorder=6)
             ax.set_title(title, fontsize=13, fontweight="bold")
             ax.set_axis_off()
         plt.suptitle("HABRI — Tennessee\nAll 1,701 Census Tracts | Eastern TN Helene counties outlined",
                      fontsize=14, fontweight="bold")
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02,
-                            wspace=0.06, hspace=0.10)
+        fig.subplots_adjust(left=0.12, right=0.88, top=0.91, bottom=0.02,
+                            wspace=0.26, hspace=0.10)
         fig.savefig(out_4panel, dpi=300, bbox_inches="tight")
         plt.close(fig)
         print(f"  Saved: {out_4panel}")
 
-    # ── Eastern TN profile map ────────────────────────────────────────────────
+    # ── East Tennessee profile map ────────────────────────────────────────────
     out_prof = DATA_PROCESSED / "habri_tn_profiles.png"
     if not done(out_prof) or force:
-        etn = habri[habri["county_fips"].isin(ETN_FIPS_5)].copy()
-        if len(etn) > 0:
-            etn_county_bounds = etn.dissolve(by="county_fips").boundary
-            etn_outer = etn.dissolve().boundary
-            xmin, ymin, xmax, ymax = etn.total_bounds
+        east_tn = habri[habri["county_fips"].isin(EAST_TN_FIPS_5)].copy()
+        helene = east_tn[east_tn["county_fips"].isin(ETN_FIPS_5)].copy()
+        if len(east_tn) > 0:
+            east_tn_county_bounds = east_tn.dissolve(by="county_fips").boundary
+            east_tn_outer = east_tn.dissolve().boundary
+            helene_outer = helene.dissolve().boundary if len(helene) > 0 else None
+            xmin, ymin, xmax, ymax = east_tn.total_bounds
             xpad = (xmax - xmin) * 0.04
             ypad = (ymax - ymin) * 0.03
 
@@ -671,39 +740,36 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
             ax.set_xlim(xmin - xpad, xmax + xpad)
             ax.set_ylim(ymin - ypad, ymax + ypad)
             try:
-                cx.add_basemap(ax, crs=etn.crs, source=cx.providers.CartoDB.Positron,
+                cx.add_basemap(ax, crs=east_tn.crs, source=cx.providers.CartoDB.Positron,
                                alpha=0.30)
             except Exception:
                 pass
             for profile, color in PROFILE_COLORS.items():
-                sub = etn[etn["risk_profile"] == profile]
+                sub = east_tn[east_tn["risk_profile"] == profile]
                 sub.plot(ax=ax, color=color, edgecolor="none", alpha=0.92, zorder=3)
-            etn_county_bounds.plot(ax=ax, color="white", linewidth=4.5, zorder=8)
-            etn_county_bounds.plot(ax=ax, color="black", linewidth=2.3, zorder=9)
-            etn_outer.plot(ax=ax, color="black",   linewidth=7.0, zorder=10)
-            etn_outer.plot(ax=ax, color="#ffd400", linewidth=3.2, zorder=11)
-
-            # County name labels
-            cty_centroids = etn.dissolve(by="county_fips").reset_index()
-            cty_centroids["geometry"] = cty_centroids.representative_point()
-            inv_fips = {v.lstrip("47"): k for k, v in ETN_HELENE_COUNTY_FIPS.items()}
-            for _, row in cty_centroids.iterrows():
-                name = inv_fips.get(row["county_fips"].lstrip("47"), "")
-                ax.text(row.geometry.x, row.geometry.y, name, fontsize=11,
-                        fontweight="bold", color="#1f1f1f", ha="center", va="center",
-                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.62, pad=0.20),
-                        zorder=12)
+            east_tn_county_bounds.plot(ax=ax, color="white", linewidth=3.5, zorder=8)
+            east_tn_county_bounds.plot(ax=ax, color="black", linewidth=1.5, zorder=9)
+            east_tn_outer.plot(ax=ax, color="black", linewidth=5.0, zorder=10)
+            if helene_outer is not None:
+                helene_outer.plot(ax=ax, color="#ffd400", linewidth=3.6, zorder=11)
+                helene_outer.plot(ax=ax, color="#cc6677", linewidth=1.8, zorder=12)
 
             legend_handles = [
                 mlines.Line2D([0], [0], marker="s", color="w", label=p,
                               markerfacecolor=c, markersize=16)
                 for p, c in PROFILE_COLORS.items()
             ]
+            legend_handles.append(
+                mlines.Line2D([0], [0], color="#ffd400", linewidth=3.6,
+                              label="Helene focal counties")
+            )
             ax.legend(handles=legend_handles, title="Risk Profile",
-                      fontsize=14, title_fontsize=15, loc="upper right", frameon=True)
-            ax.set_title("HABRI Vulnerability Profiles — Eastern Tennessee (Helene-Affected Counties)",
+                      fontsize=14, title_fontsize=15, loc="upper left",
+                      bbox_to_anchor=(1.01, 0.98), borderaxespad=0.0, frameon=True)
+            ax.set_title("HABRI Vulnerability Profiles — East Tennessee\nHelene focal counties outlined",
                          fontsize=16)
             ax.set_axis_off()
+            fig.subplots_adjust(left=0.03, right=0.81, top=0.93, bottom=0.03)
             fig.savefig(out_prof, dpi=300, bbox_inches="tight")
             plt.close(fig)
             print(f"  Saved: {out_prof}")
@@ -732,11 +798,22 @@ def make_figures(habri: gpd.GeoDataFrame, latency_norm_q4: pd.Series | None,
                 ax.set_xlabel(xlabel)
                 ax.set_ylabel("Latency Δ (Q4 − Q3, normalized)")
                 ax.set_title(f"ρ = {rho:.3f}  p = {pval:.3e}  n = {len(val)}")
-                ax.legend(frameon=False, fontsize=9)
                 ax.grid(alpha=0.3)
+            fig.legend(
+                handles=[
+                    mlines.Line2D([0], [0], marker="o", linestyle="None", color=color,
+                                  markerfacecolor=color, markersize=7, label=profile)
+                    for profile, color in PROFILE_COLORS.items()
+                ],
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.92),
+                ncol=3,
+                frameon=False,
+                fontsize=9,
+            )
             plt.suptitle("Eastern TN — HABRI vs. Helene Latency Degradation (Q3→Q4 2024)",
                          fontweight="bold")
-            fig.tight_layout()
+            fig.tight_layout(rect=(0, 0, 1, 0.82))
             fig.savefig(out_val, dpi=200, bbox_inches="tight")
             plt.close(fig)
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a joint NC+TN HABRI layer on one standardized scale.
+"""Build a joint North Carolina and Tennessee HABRI layer on one standardized scale.
 
 This script preserves the existing state baselines and writes a separate
-cross-state product that standardizes the completed NC and TN outputs onto a
-shared NC+TN distribution.
+cross-state product that standardizes the completed North Carolina and
+Tennessee outputs onto a shared distribution.
 
 Outputs
 -------
@@ -15,7 +15,8 @@ data/processed/habri_nc_tn_standardized.png
     Single-panel standardized HABRI choropleth for both states.
 
 data/processed/habri_nc_tn_standardized_4panel.png
-    Four-panel map for H_E, I_F, C_C, and HABRI on the shared NC+TN scale.
+    Four-panel map for H_E, I_F, C_C, and HABRI on the shared North Carolina
+    and Tennessee scale.
 
 data/processed/habri_nc_tn_standardized.html
     Interactive Folium map of the combined standardized layer.
@@ -62,7 +63,38 @@ def _save_figure(fig: plt.Figure, path: Path | None, *, dpi: int = 300) -> None:
     print(f"  Saved: {path}")
 
 
-def _plot_frame(ax: plt.Axes, gdf: gpd.GeoDataFrame, column: str, title: str) -> None:
+def _outside_legend_kwds(
+    side: str,
+    *,
+    fontsize: int = 9,
+    title: str = "Score",
+    title_fontsize: int = 9,
+) -> dict:
+    if side == "left":
+        loc = "upper right"
+        anchor = (-0.04, 1.0)
+    else:
+        loc = "upper left"
+        anchor = (1.04, 1.0)
+    return {
+        "loc": loc,
+        "bbox_to_anchor": anchor,
+        "borderaxespad": 0.0,
+        "fontsize": fontsize,
+        "frameon": True,
+        "title": title,
+        "title_fontsize": title_fontsize,
+    }
+
+
+def _plot_frame(
+    ax: plt.Axes,
+    gdf: gpd.GeoDataFrame,
+    column: str,
+    title: str,
+    *,
+    legend_kwds: dict | None = None,
+) -> None:
     gdf.plot(
         column=column,
         ax=ax,
@@ -73,13 +105,7 @@ def _plot_frame(ax: plt.Axes, gdf: gpd.GeoDataFrame, column: str, title: str) ->
         edgecolor="none",
         linewidth=0,
         alpha=0.90,
-        legend_kwds={
-            "loc": "lower left",
-            "fontsize": 9,
-            "frameon": True,
-            "title": "Score",
-            "title_fontsize": 9,
-        },
+        legend_kwds=legend_kwds or _outside_legend_kwds("right"),
         missing_kwds={"color": "#cccccc"},
         zorder=3,
     )
@@ -112,13 +138,27 @@ def plot_joint_composite_map(combined: gpd.GeoDataFrame, save_path: Path | None)
     plot_gdf = combined.to_crs("EPSG:3857")
     fig, ax = plt.subplots(figsize=(14, 11))
     _add_basemap(ax, plot_gdf)
-    _plot_frame(ax, plot_gdf, "HABRI", "NC + TN HABRI (shared standardized scale)")
+    _plot_frame(
+        ax,
+        plot_gdf,
+        "HABRI",
+        "NC and TN HABRI (shared standardized scale)",
+        legend_kwds={
+            "loc": "upper left",
+            "bbox_to_anchor": (1.01, 1.0),
+            "borderaxespad": 0.0,
+            "fontsize": 9,
+            "frameon": True,
+            "title": "Score",
+            "title_fontsize": 9,
+        },
+    )
     plt.suptitle(
-        "Hazard-Adjusted Broadband Reliability Index\nNorth Carolina + Tennessee",
+        "Hazard-Adjusted Broadband Reliability Index\nNorth Carolina and Tennessee",
         fontsize=16,
         fontweight="bold",
     )
-    fig.subplots_adjust(left=0.03, right=0.97, top=0.90, bottom=0.03)
+    fig.subplots_adjust(left=0.03, right=0.82, top=0.90, bottom=0.03)
     _save_figure(fig, save_path)
     plt.close(fig)
 
@@ -132,18 +172,24 @@ def plot_joint_4panel(combined: gpd.GeoDataFrame, save_path: Path | None) -> Non
     xpad = (xmax - xmin) * 0.02
     ypad = (ymax - ymin) * 0.02
 
-    for ax, (column, title) in zip(axes.flat, PANEL_COLS):
+    for idx, (ax, (column, title)) in enumerate(zip(axes.flat, PANEL_COLS)):
         ax.set_xlim(xmin - xpad, xmax + xpad)
         ax.set_ylim(ymin - ypad, ymax + ypad)
         _add_basemap(ax, plot_gdf)
-        _plot_frame(ax, plot_gdf, column, title)
+        _plot_frame(
+            ax,
+            plot_gdf,
+            column,
+            title,
+            legend_kwds=_outside_legend_kwds("left" if idx % 2 == 0 else "right"),
+        )
 
     plt.suptitle(
-        "HABRI Shared-Scale Sub-Indices Across North Carolina and Tennessee",
+        "HABRI shared-scale sub-indices across North Carolina and Tennessee",
         fontsize=15,
         fontweight="bold",
     )
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.92, bottom=0.02, wspace=0.06, hspace=0.10)
+    fig.subplots_adjust(left=0.12, right=0.88, top=0.92, bottom=0.02, wspace=0.26, hspace=0.10)
     _save_figure(fig, save_path)
     plt.close(fig)
 
@@ -170,7 +216,7 @@ def plot_folium_map(combined: gpd.GeoDataFrame, save_path: Path | None) -> None:
         fill_color="BuPu",
         fill_opacity=0.72,
         line_opacity=0.10,
-        legend_name="HABRI Score (shared NC+TN standardized scale)",
+        legend_name="HABRI Score (shared North Carolina and Tennessee standardized scale)",
         name="HABRI",
     ).add_to(m)
 
@@ -220,7 +266,9 @@ def print_summary(combined: gpd.GeoDataFrame) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build a joint NC+TN HABRI layer.")
+    parser = argparse.ArgumentParser(
+        description="Build a joint North Carolina and Tennessee HABRI layer."
+    )
     parser.add_argument(
         "--nc-gpkg",
         default=str(DATA_PROCESSED / "habri_composite.gpkg"),

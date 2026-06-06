@@ -54,6 +54,7 @@ from src.config import (
     W_IF_TOWER_DENSITY,
     W_INFRA_FRAGILITY,
 )
+from src.region import NC_CONFIG
 from src.utils import compute_adaptive_if_weights, impute_with_median
 
 HABRI_QUINTILE_LABELS = ["Very Low", "Low", "Moderate", "High", "Very High"]
@@ -234,18 +235,34 @@ def integrate(dry_run: bool = False) -> pd.DataFrame:
         geometry = None
 
     # Merge updated I_F and power_grid_norm into composite
+    overwrite_cols = [
+        "I_F",
+        "tower_density_norm",
+        "latency_norm",
+        "road_fragility",
+        "power_grid_norm",
+        "p_wired",
+        "w_tower",
+        "w_road",
+    ]
+    stale_cols = overwrite_cols + [f"{col}_old" for col in overwrite_cols]
+    habri = habri.drop(columns=[col for col in stale_cols if col in habri.columns], errors="ignore")
+
     habri = habri.merge(
-        infra[["GEOID", "I_F", "tower_density_norm", "latency_norm",
-               "road_fragility", "power_grid_norm"]],
+        infra[[
+            "GEOID",
+            "I_F",
+            "tower_density_norm",
+            "latency_norm",
+            "road_fragility",
+            "power_grid_norm",
+            "p_wired",
+            "w_tower",
+            "w_road",
+        ]],
         on="GEOID",
         how="left",
-        suffixes=("_old", ""),
     )
-    # Drop old versions of overwritten columns
-    for col in ["I_F", "tower_density_norm", "latency_norm", "road_fragility"]:
-        old_col = f"{col}_old"
-        if old_col in habri.columns:
-            habri.drop(columns=[old_col], inplace=True)
 
     habri["HABRI"] = (
         W_HAZARD_EXPOSURE * habri["H_E"]
@@ -288,6 +305,16 @@ def integrate(dry_run: bool = False) -> pd.DataFrame:
         n = (habri["risk_profile"] == profile).sum()
         mean_score = habri.loc[habri["risk_profile"] == profile, "HABRI"].mean()
         print(f"  {profile:20s}: {n:,} tracts ({n/len(habri)*100:.1f}%)  mean HABRI={mean_score:.3f}")
+
+    county_name_by_fips = {
+        f"{NC_CONFIG.state_fips}{county_fips}": county_name
+        for county_name, county_fips in NC_CONFIG.county_fips.items()
+    }
+    habri["state_fips"] = NC_CONFIG.state_fips
+    habri["state_abbr"] = "NC"
+    habri["state_name"] = NC_CONFIG.state_name
+    habri["county_fips"] = habri["GEOID"].astype(str).str.zfill(11).str[:5]
+    habri["county_name"] = habri["county_fips"].map(county_name_by_fips).fillna("Unknown")
 
     if dry_run:
         print("\n[DRY RUN] No files written.")

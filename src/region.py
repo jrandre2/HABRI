@@ -272,6 +272,45 @@ _TN_COUNTY_FIPS: dict[str, str] = {
     "White": "185", "Williamson": "187", "Wilson": "189",
 }
 
+# East Tennessee grand division (Tennessee Code Annotated § 4-1-202).
+# Used for broader regional mapping so East Tennessee figures are not limited to
+# only the far northeast corner of the state.
+EAST_TN_COUNTY_FIPS: dict[str, str] = {
+    "Anderson":   "47001",
+    "Bledsoe":    "47007",
+    "Blount":     "47009",
+    "Bradley":    "47011",
+    "Campbell":   "47013",
+    "Carter":     "47019",
+    "Claiborne":  "47025",
+    "Cocke":      "47029",
+    "Grainger":   "47057",
+    "Greene":     "47059",
+    "Hamblen":    "47063",
+    "Hamilton":   "47065",
+    "Hancock":    "47067",
+    "Hawkins":    "47073",
+    "Jefferson":  "47089",
+    "Johnson":    "47091",
+    "Knox":       "47093",
+    "Loudon":     "47105",
+    "Marion":     "47115",
+    "McMinn":     "47107",
+    "Meigs":      "47121",
+    "Monroe":     "47123",
+    "Morgan":     "47129",
+    "Polk":       "47139",
+    "Rhea":       "47143",
+    "Roane":      "47145",
+    "Scott":      "47151",
+    "Sevier":     "47155",
+    "Sullivan":   "47163",
+    "Unicoi":     "47171",
+    "Union":      "47173",
+    "Washington": "47179",
+    "Cumberland": "47035",
+}
+
 # Eastern TN counties most severely affected by Hurricane Helene (Sep 2024):
 # Unicoi (Erwin/Nolichucky River flooding), Carter (Elizabethton),
 # Johnson (Mountain City), Sullivan (Bristol/Kingsport),

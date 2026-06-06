@@ -1,9 +1,22 @@
-# HABRI — Hazard-Adjusted Broadband Reliability Index
+# HABRI / HABRI-GRID
 
-**Identifying the communities most likely to lose phone and internet service during a natural disaster — before the next storm hits.**
+**Baseline broadband resilience index plus a Genesis-aligned pilot for coupled power and communications resilience planning.**
 
 > For a comprehensive overview of the project, methodology, and results, see the
-> [HABRI Report (PDF)](docs/HABRI%20Report.pdf).
+> [HABRI Report (PDF)](docs/HABRI_Report.pdf).
+
+---
+
+## Project Tracks
+
+This repository now supports two related products:
+
+- **HABRI** — the original tract-level **Hazard-Adjusted Broadband Reliability Index** for identifying communities most likely to lose communications service during a disaster.
+- **HABRI-GRID** — a Genesis-aligned **public-data pilot** that reframes HABRI as an asset-graph workflow for outage forecasting, restoration lag, and mitigation ranking across power and communications dependencies.
+
+The baseline HABRI layer remains the validated benchmark. HABRI-GRID treats that benchmark as an input and comparator rather than the end product.
+
+For the nationwide outage-training expansion path, see [Nationwide Data Acquisition Plan](docs/NATIONAL_DATA_ACQUISITION.md).
 
 ---
 
@@ -182,6 +195,18 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+To build the HABRI-GRID public-data pilot outputs:
+
+```bash
+python scripts/build_habri_grid_pilot.py
+```
+
+To inspect the nationwide data acquisition checklist:
+
+```bash
+python scripts/print_national_data_acquisition.py --phase 1
+```
+
 ### Reproduce the Analysis
 
 ```bash
@@ -206,8 +231,10 @@ The full NC pipeline takes 2-4 hours from scratch (road network download and cen
 
 | Document | Description |
 |----------|-------------|
-| [HABRI Report (PDF)](docs/HABRI%20Report.pdf) | Comprehensive report covering methodology, results, and policy implications |
+| [HABRI Report (PDF)](docs/HABRI_Report.pdf) | Comprehensive report covering methodology, results, and policy implications |
 | [HABRI Explained](docs/HABRI_EXPLAINED.md) | Plain-language summary for a general audience |
+| [HABRI-GRID](docs/HABRI_GRID.md) | Genesis-aligned public-data pilot for coupled power and communications resilience |
+| [Nationwide Data Acquisition Plan](docs/NATIONAL_DATA_ACQUISITION.md) | Phased national outage-label, hazard, and power-coupling acquisition plan |
 | [Methodology](docs/METHODOLOGY.md) | Complete formulas, statistical methods, and design decisions |
 | [Data Dictionary](docs/DATA_DICTIONARY.md) | Column-by-column definitions for every data file |
 | [Contributing](docs/CONTRIBUTING.md) | Developer setup and how to extend HABRI to new regions |

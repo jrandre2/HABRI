@@ -208,10 +208,10 @@ def plot_statewide(stats: pd.DataFrame, save_path: Path | None) -> None:
     ax.set_xticklabels(labels, rotation=45, ha="right")
     ax.set_ylabel("Mean Score (0–1, 1 = highest risk)")
     ax.set_title("HABRI Statewide Quarterly Trend — All NC Tracts (n=2,660)")
-    ax.legend(frameon=False, ncol=2)
+    ax.legend(frameon=False, ncol=2, loc="upper center", bbox_to_anchor=(0.5, 1.18))
     ax.set_ylim(0, 0.75)
     ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
 
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -249,9 +249,9 @@ def plot_wnc_counties(county_stats: pd.DataFrame, save_path: Path | None) -> Non
     ax.set_xticklabels(labels, rotation=45, ha="right")
     ax.set_ylabel("Mean HABRI Score")
     ax.set_title("Western NC County HABRI Trends — Hurricane Helene Impact and Recovery")
-    ax.legend(frameon=False, ncol=3, fontsize=9)
+    ax.legend(frameon=False, ncol=3, fontsize=9, loc="upper center", bbox_to_anchor=(0.5, 1.20))
     ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
 
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -286,9 +286,9 @@ def plot_profile_stack(profile_counts: pd.DataFrame, save_path: Path | None) -> 
     ax.set_ylabel("Fraction of Tracts")
     ax.set_title("Risk Profile Distribution by Quarter — All NC Tracts")
     ax.set_ylim(0, 1.05)
-    ax.legend(frameon=False, loc="upper right")
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.16), ncol=3)
     ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
 
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -338,9 +338,10 @@ def plot_wnc_recovery_scatter(
     ax.set_xlabel(f"HABRI Score ({baseline_label} — pre-Helene)")
     ax.set_ylabel(f"HABRI Score ({latest_label})")
     ax.set_title(f"Western NC Recovery: {baseline_label} → {latest_label}")
-    ax.legend(frameon=False, fontsize=9)
+    ax.legend(frameon=False, fontsize=9, loc="upper left",
+              bbox_to_anchor=(1.01, 1.0), borderaxespad=0.0)
     ax.grid(alpha=0.3)
-    fig.tight_layout()
+    fig.subplots_adjust(right=0.76)
 
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")

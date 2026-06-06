@@ -83,6 +83,25 @@ WNC_FIPS_5 = {f"{NC_CONFIG.state_fips}{county_fips}" for county_fips in WNC_COUN
 ETN_FIPS_5 = set(ETN_HELENE_COUNTY_FIPS.values())
 
 
+def _outside_legend_kwds(side: str, *, fontsize: int = 9, title: str | None = None) -> dict:
+    if side == "left":
+        loc = "upper right"
+        anchor = (-0.04, 1.0)
+    else:
+        loc = "upper left"
+        anchor = (1.04, 1.0)
+    kwds = {
+        "loc": loc,
+        "bbox_to_anchor": anchor,
+        "borderaxespad": 0.0,
+        "fontsize": fontsize,
+        "frameon": True,
+    }
+    if title is not None:
+        kwds["title"] = title
+    return kwds
+
+
 # ── Data loaders ──────────────────────────────────────────────────────────────
 
 def load_nc() -> gpd.GeoDataFrame:
@@ -144,10 +163,10 @@ def plot_side_by_side_map(nc: gpd.GeoDataFrame, tn: gpd.GeoDataFrame,
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 8))
 
-    for ax, gdf, title, boundary_color in [
+    for idx, (ax, gdf, title, boundary_color) in enumerate([
         (axes[0], wnc, "Western NC (WNC)\nHurricane Helene Focal Counties", "#2C3E50"),
         (axes[1], etn, "Eastern TN (ETN)\nHurricane Helene Focal Counties", "#2C3E50"),
-    ]:
+    ]):
         try:
             import contextily as cx
             cx.add_basemap(ax, crs=gdf.crs, source=cx.providers.CartoDB.Positron,
@@ -156,8 +175,11 @@ def plot_side_by_side_map(nc: gpd.GeoDataFrame, tn: gpd.GeoDataFrame,
             pass
         gdf.plot(column="HABRI", ax=ax, legend=True, cmap="cividis_r",
                  scheme="NaturalBreaks", k=5, edgecolor="none", alpha=0.90,
-                 legend_kwds={"loc": "lower left", "fontsize": 9, "frameon": True,
-                               "title": "HABRI\n(within-state)"},
+                 legend_kwds=_outside_legend_kwds(
+                     "left" if idx == 0 else "right",
+                     fontsize=9,
+                     title="HABRI\n(within-state)",
+                 ),
                  zorder=3)
         gdf.dissolve(by="county_fips").boundary.plot(
             ax=ax, color=boundary_color, linewidth=1.6, zorder=6)
@@ -167,7 +189,7 @@ def plot_side_by_side_map(nc: gpd.GeoDataFrame, tn: gpd.GeoDataFrame,
     plt.suptitle("Pre-Disaster HABRI Scores — Hurricane Helene Impact Areas\n"
                  "(Scores normalized within each state independently)",
                  fontsize=13, fontweight="bold")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0.06, 0, 0.94, 0.92))
     if save_path:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"  Saved: {save_path}")
@@ -206,11 +228,22 @@ def plot_helene_validation(nc: gpd.GeoDataFrame, tn: gpd.GeoDataFrame,
         ax.set_xlabel("Pre-Storm HABRI Score")
         ax.set_ylabel("Latency Δ Q4 − Q3 2024 (ms)")
         ax.set_title(f"{region_name}  ρ = {rho:.3f}  p = {pval:.3e}  n = {len(df)}")
-        ax.legend(frameon=False, fontsize=9)
         ax.grid(alpha=0.3)
+    fig.legend(
+        handles=[
+            mlines.Line2D([0], [0], marker="o", linestyle="None", color=color,
+                          markerfacecolor=color, markersize=7, label=profile)
+            for profile, color in PROFILE_COLORS.items()
+        ],
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.93),
+        ncol=3,
+        frameon=False,
+        fontsize=9,
+    )
     plt.suptitle("HABRI vs. Helene-Induced Latency Degradation — WNC and ETN",
                  fontweight="bold")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.82))
     if save_path:
         fig.savefig(save_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {save_path}")
@@ -255,10 +288,9 @@ def plot_profile_comparison(nc: gpd.GeoDataFrame, tn: gpd.GeoDataFrame,
     ax.set_xticklabels(profiles)
     ax.set_ylabel("Fraction of Tracts")
     ax.set_ylim(0, 1.1)
-    ax.set_title("Risk Profile Distribution: NC vs. TN (Statewide and Helene-Affected Counties)")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.16), ncol=2)
     ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     if save_path:
         fig.savefig(save_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {save_path}")
@@ -319,10 +351,10 @@ def plot_quarterly_recovery(nc_quarters_path: Path, tn_quarters_path: Path,
 
     ax.set_ylabel("Mean HABRI Score")
     ax.set_title("Post-Helene Recovery: WNC vs. ETN Quarterly HABRI Trend")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.14), ncol=2)
     ax.grid(axis="y", alpha=0.3)
     plt.xticks(rotation=45, ha="right")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
     if save_path:
         fig.savefig(save_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {save_path}")
