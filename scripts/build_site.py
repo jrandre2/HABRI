@@ -130,6 +130,18 @@ def build_index(stats: dict) -> str:
     </div>
 
     <div class="section">
+      <h2>Interactive Map — North Carolina + Tennessee</h2>
+      <p style="margin-bottom:1rem;font-size:.9rem;color:#555">
+        Census-tract broadband outage risk on a shared NC+TN scale. Hover any tract for its score and
+        risk profile; use the selector to switch between overall HABRI and its hazard, infrastructure,
+        and coping-capacity drivers.
+      </p>
+      <iframe src="map/" title="Interactive HABRI map (NC + TN)" loading="lazy"
+              style="width:100%;height:540px;border:1px solid #dee2e6;border-radius:8px"></iframe>
+      <p style="margin-top:.5rem;font-size:.85rem"><a href="map/">Open the full-screen map &rarr;</a></p>
+    </div>
+
+    <div class="section">
       <h2>Index Formula</h2>
       <div class="formula">HABRI = 0.40 &times; H<sub>E</sub> + 0.35 &times; I<sub>F</sub> + 0.25 &times; C<sub>C</sub></div>
       <table>
@@ -161,7 +173,8 @@ def build_index(stats: dict) -> str:
     <div class="section">
       <h2>Documentation &amp; Code</h2>
       <div class="links">
-        <a href="https://github.com/jesseandrews/habri">GitHub Repository</a>
+        <a href="map/">Interactive Map (NC + TN)</a>
+        <a href="https://github.com/jrandre2/HABRI">GitHub Repository</a>
         <a href="docs/METHODOLOGY.md">Methodology</a>
         <a href="docs/DATA_DICTIONARY.md">Data Dictionary</a>
         <a href="docs/HABRI_EXPLAINED.md">Plain-Language Summary</a>
@@ -198,6 +211,25 @@ def main() -> None:
             shutil.rmtree(docs_dst)
         shutil.copytree(docs_src, docs_dst)
         print(f"Copied docs/ → {docs_dst}")
+
+    # Copy pre-built web assets (interactive map) into _site/.
+    # The map is committed under web/ because its source GeoPackage is gitignored,
+    # so CI cannot regenerate it — it ships the pre-built lightweight artifact.
+    web_src = PROJECT_ROOT / "web"
+    if web_src.exists():
+        import shutil
+        skip = shutil.ignore_patterns("._*", ".DS_Store")
+        for item in sorted(web_src.iterdir()):
+            if item.name.startswith("."):
+                continue
+            dst = SITE_DIR / item.name
+            if item.is_dir():
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(item, dst, ignore=skip)
+            else:
+                shutil.copy2(item, dst)
+        print(f"Copied web/ → {SITE_DIR}/ (interactive map at map/)")
 
     print(f"Site built at {SITE_DIR}/")
 

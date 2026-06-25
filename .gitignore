@@ -41,6 +41,9 @@ notebooks/cache/
 # Temporary build outputs
 tmp/
 
+# Generated static site (rebuilt by scripts/build_site.py in CI from web/ + docs/)
+_site/
+
 # Benton deliverables generated outputs
 benton_deliverables/output/
 
