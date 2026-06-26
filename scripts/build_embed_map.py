@@ -73,7 +73,9 @@ def build_geojson(tolerance: float, precision: int) -> Path:
     for c in ROUND3:
         out[c] = pd.to_numeric(out[c], errors="coerce").round(3)
     for c in QUINT:
-        out[c] = pd.to_numeric(out[c], errors="coerce").round().astype("Int64")
+        # Risk tiers are string labels ("Very High" ... "Very Low"); keep them as
+        # text. The old numeric coercion turned every tier into null ("Qnull/5").
+        out[c] = out[c].astype("string")
 
     if tolerance > 0:
         # preserve_topology avoids self-intersections; thin white tract strokes in
@@ -101,7 +103,9 @@ def build_html() -> Path:
         "__SOURCES__": SOURCES,
         "__REPO__": REPO,
         "__BUILD_DATE__": date.today().isoformat(),
-        "__GEOJSON__": "habri_nc_tn.geojson",
+        # ?v=<build date> busts the browser cache so a redeploy doesn't serve a
+        # returning visitor the previous day's GeoJSON.
+        "__GEOJSON__": f"habri_nc_tn.geojson?v={date.today().isoformat()}",
     }.items():
         html = html.replace(token, value)
     html_path = OUT_DIR / "index.html"
@@ -179,12 +183,13 @@ function styleFor(field){return function(f){const p=f.properties;let fill='#cccc
   if(field.type==='cat'){fill=PROFILE_COLORS[p[field.key]]||'#cccccc';}
   else{const d=domains[field.key];const span=(d[1]-d[0])||1;fill=rampColor((p[field.key]-d[0])/span);}
   return {fillColor:fill,weight:0.3,color:'#ffffff',opacity:0.55,fillOpacity:0.82};};}
-function tip(p){return '<b>'+p.county_name+' County, '+p.state_abbr+'</b><br>'+
-  'HABRI (NC+TN scale): <b>'+fmt(p.HABRI)+'</b> &middot; Q'+p.HABRI_quintile+'/5<br>'+
-  'Within '+p.state_abbr+': Q'+p.HABRI_quintile_state+'/5<br>'+
+function tip(p){var q=p.HABRI_quintile||'n/a',qs=p.HABRI_quintile_state||'n/a';
+  return '<b>'+p.county_name+' County, '+p.state_abbr+'</b><br>'+
+  'HABRI (NC+TN scale): <b>'+fmt(p.HABRI)+'</b><br>'+
+  'Risk tier: <b>'+q+'</b> (within '+p.state_abbr+': '+qs+')<br>'+
   'Profile: '+p.risk_profile+'<br>'+
   '<span style="color:#666">Hazard '+fmt(p.H_E)+' &middot; Infra '+fmt(p.I_F)+' &middot; Coping '+fmt(p.C_C)+'</span>';}
-function highlight(e){const l=e.target;l.setStyle({weight:1.6,color:'#222',opacity:1});l.bringToFront();}
+function highlight(e){e.target.setStyle({weight:1.6,color:'#222',opacity:1});}
 function reset(e){layer.resetStyle(e.target);}
 function updateLegend(){const el=document.getElementById('legend');
   if(current.type==='cat'){let h='<div class="lt">'+current.label+'</div>';
@@ -202,8 +207,13 @@ fetch(GEOJSON_URL).then(r=>r.json()).then(gj=>{
     for(const ft of gj.features){const v=ft.properties[fd.key];if(v!=null&&!isNaN(v)){if(v<mn)mn=v;if(v>mx)mx=v;}}
     domains[fd.key]=[mn,mx];}}
   layer=L.geoJSON(gj,{style:styleFor(current),onEachFeature:function(f,l){
-    l.bindTooltip(tip(f.properties),{sticky:true,className:'habri'});
     l.on({mouseover:highlight,mouseout:reset});}}).addTo(map);
+  // A single tooltip bound to the whole layer (sticky = follows the pointer). Binding
+  // one tooltip per tract let popups pile up when a mouseout was missed; one shared
+  // tooltip means at most one is ever on screen, and it moves with the cursor.
+  layer.bindTooltip(function(l){return tip(l.feature.properties);},{sticky:true,className:'habri'});
+  // Safety net: clear the tooltip whenever the pointer leaves the map entirely.
+  map.on('mouseout',function(){layer.closeTooltip();});
   map.fitBounds(layer.getBounds(),{padding:[10,10]});
   const sel=document.getElementById('field');
   FIELDS.forEach(function(fd,i){const o=document.createElement('option');o.value=i;o.textContent=fd.label;sel.appendChild(o);});
